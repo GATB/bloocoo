@@ -5,73 +5,44 @@
  *   Copyright (c) INRIA, CeCILL license, 2013                               *
  *****************************************************************************/
 
+#include <DSK.hpp>
+#include <Bloocoo.hpp>
 #include <gatb/system/impl/System.hpp>
-#include <gatb/tools/misc/impl/OptionsParser.hpp>
 #include <gatb/tools/misc/impl/Property.hpp>
 
-using namespace gatb::core::system::impl;
-using namespace gatb::core::tools::misc;
-using namespace gatb::core::tools::misc::impl;
+/********************************************************************************/
+
+using namespace gatb::core;
 using namespace std;
 
 /********************************************************************************/
 
 int main (int argc, char* argv[])
 {
-    OptionsParser parser;
-
-    parser.add (new OptionOneParam (PROP_KMER_SIZE,   "size of a kmer",                       true));
-    parser.add (new OptionOneParam (PROP_DB,          "URI of the bank",                      true));
-    parser.add (new OptionOneParam (PROP_NB_CORES,    "number of cores",                      false));
-    parser.add (new OptionOneParam (PROP_MAX_MEMORY,  "max memory",                           false));
-    parser.add (new OptionOneParam (PROP_NKS,         "abundance threshold for solid kmers",  false));
-    parser.add (new OptionOneParam (PROP_PREFIX,      "prefix URI for temporary files",       false));
-    parser.add (new OptionNoParam  (PROP_QUIET,       "don't display exec information",       false));
-    parser.add (new OptionOneParam (PROP_STATS_XML,   "dump exec info into a XML file",       false));
-    
-    // We define a try/catch block in case some method fails (bad filename for instance)
+    // We define a try/catch block in case some method fails
     try
     {
-        /** We parse the command line arguments. */
-        parser.parse (argc, argv);
-
-        /** We get the options as a Properties object. */
-        IProperties& props = parser.getProperties();
-
-        /** We read properties from the init file (if any). */
-        props.add (1, new Properties (System::info().getHomeDirectory() + string ("/.dskrc")));
-
-#if 0
         /** We create an instance of DSK class. */
-        DSK dsk (&props);
+        DSK dsk;
 
         /** We execute dsk. */
-        dsk.execute ();
+        dsk.run (argc, argv);
 
-        /** We may have to dump execution information to stdout. */
-        if (props[PROP_QUIET] == 0)
-        {
-            RawDumpPropertiesVisitor visit;
-            dsk.getStats().accept     (&visit);
-        }
+        /** We create an instance of Bloocoo class. */
+        Bloocoo bloocoo;
 
-        /** We may have to dump execution information to stdout. */
-        if (props[PROP_STATS_XML] != 0)
-        {
-            XmlDumpPropertiesVisitor visit (props[PROP_STATS_XML]->getValue());
-            dsk.getStats().accept     (&visit);
-        }
-#endif
+        /** We execute dsk. */
+        bloocoo.run (argc, argv);
     }
 
-    catch (OptionFailure& e)
+    catch (tools::misc::impl::OptionFailure& e)
     {
-        if (parser.saw("-h"))    {   parser.displayHelp   (stdout);   }
-        else                     {   parser.displayErrors (stdout);   }
+        if (e.getParser().saw("-h"))    {   e.getParser().displayHelp   (stdout);   }
+        else                            {   e.getParser().displayErrors (stdout);   }
         return EXIT_FAILURE;
     }
 
-    catch (gatb::core::system::Exception& e)
+    catch (system::Exception& e)
     {
         cerr << "EXCEPTION: " << e.getMessage() << endl;
         return EXIT_FAILURE;
@@ -79,4 +50,3 @@ int main (int argc, char* argv[])
 
     return EXIT_SUCCESS;
 }
-
