@@ -7,7 +7,7 @@ cmake_minimum_required (VERSION 2.6)
 ################################################################################
 
 # we depend on gatb-core; here, we define where to find all the required material
-add_subdirectory (../../thirdparty/gatb-core  "${CMAKE_CURRENT_BINARY_DIR}/ext/gatb-core")
+add_subdirectory (../../thirdparty/gatb-core/gatb-core  "${CMAKE_CURRENT_BINARY_DIR}/ext/gatb-core")
 
 
 ################################################################################
@@ -17,11 +17,14 @@ add_subdirectory (../../thirdparty/gatb-core  "${CMAKE_CURRENT_BINARY_DIR}/ext/g
 # we get compilation definitions from the gatb-core part
 add_definitions (${gatb-core-flags})
 
-# we give the source directories: from project source and from GATB-CORE source
-include_directories (src  ${gatb-core-includes})
+# we give the headers directories from : 
+#       - from project source 
+#       - from GATB-CORE source
+#       - from dsk source 
+include_directories (src  ${gatb-core-includes} ../dsk/src)
 
 # we define the files to be compiled
-file (GLOB_RECURSE  ProjectFiles  src/*)
+file (GLOB_RECURSE  ProjectFiles  src/*  ../dsk/src/DSK.*)
 
 # we define the artifact to be built: the project binary
 add_executable        (${CMAKE_PROJECT_NAME}  ${ProjectFiles})
