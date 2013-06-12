@@ -9,10 +9,11 @@
 #include <Bloocoo.hpp>
 #include <gatb/system/impl/System.hpp>
 #include <gatb/tools/misc/impl/Property.hpp>
+#include <gatb/tools/misc/impl/Tool.hpp>
 
 /********************************************************************************/
 
-using namespace gatb::core;
+using namespace gatb::core::tools;
 using namespace std;
 
 /********************************************************************************/
@@ -22,22 +23,17 @@ int main (int argc, char* argv[])
     // We define a try/catch block in case some method fails
     try
     {
-        /** We create an instance of DSK class. */
-        DSK dsk;
+        misc::impl::ToolComposite tool ("root");
 
-        /** We execute dsk. */
-        dsk.run (argc, argv);
+        tool.add (new DSK());
+        tool.add (new Bloocoo());
 
-        /** We create an instance of Bloocoo class. */
-        Bloocoo bloocoo;
-
-        /** We execute dsk. */
-        bloocoo.run (argc, argv);
+        tool.run (argc, argv);
     }
 
-    catch (tools::misc::impl::OptionFailure& e)
+    catch (misc::impl::OptionFailure& e)
     {
-        if (e.getParser().saw("-h"))    {   e.getParser().displayHelp   (stdout);   }
+        if (e.getParser().saw("-help")) {   e.getParser().displayHelp   (stdout);   }
         else                            {   e.getParser().displayErrors (stdout);   }
         return EXIT_FAILURE;
     }

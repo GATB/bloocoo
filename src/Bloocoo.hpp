@@ -53,11 +53,6 @@ public:
     /** */
     Bloocoo ();
 
-    /** */
-    static const char* STR_KMER_SIZE;
-    static const char* STR_SOLID_KMERS;
-    static const char* STR_DATABASE;
-
 private:
 
     /** */
@@ -65,9 +60,6 @@ private:
 
     /** */
     virtual collections::impl::Bloom<kmer_type>* createBloom ();
-
-    /** */
-    virtual dp::Iterator<Sequence>* createBankIterator (IBank& bank);
 };
 
 /********************************************************************************/
