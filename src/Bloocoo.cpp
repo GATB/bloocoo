@@ -67,11 +67,11 @@ using namespace gatb::core::tools::math;
 /********************************************************************************/
 //functor for read correction this is the code to correct a single read
 /********************************************************************************/
-struct CorrectReads
+class CorrectReads : public IteratorFunctor
 {
+public:
     void operator() ( Sequence& s) //no const otherwise error with tKmer.setData
     {
-#if 1
         // _bloom   is the bloom filter containing the solid kmers
         // _bloom.contains(kmer)  to ask if it contains a kmer
 
@@ -277,7 +277,6 @@ struct CorrectReads
             //                    printf("not indexed %lli\n",tai_not_indexed);
 
         }
-#endif
 
         // TO BE IMPROVED... SHOULD USE A SYNCHRONIZED BANK INSTEAD OF DEALING WITH SYNCHRONIZATION HERE...
         if (_synchro)  { _synchro->lock ();   }
@@ -289,8 +288,8 @@ struct CorrectReads
 
     }
 
-    CorrectReads (Bloom<kmer_type>& bloom, Bank& outbank, Bloocoo & bloocoo, ISynchronizer* synchro, u_int64_t& nb_errors_corrected)
-        : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo), _synchro(synchro),
+    CorrectReads (Bloom<kmer_type>& bloom, Bank& outbank, Bloocoo & bloocoo, u_int64_t& nb_errors_corrected)
+        : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
           model(_bloocoo._kmerSize), itKmer(model)
     {}
@@ -304,7 +303,6 @@ struct CorrectReads
     Bloom<kmer_type>& _bloom; // the bloom containing the solid kmers
     Bank&             _outbank; // the bloom containing the solid kmers
     Bloocoo &         _bloocoo;
-    ISynchronizer*    _synchro;
 
     KmerModel           model;
     KmerModel::Iterator itKmer;
@@ -328,8 +326,8 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
 
     /** We add options specific to this tool. */
     _parser->add (new OptionOneParam (DSK::STR_KMER_SIZE,   "size of a kmer",   true));
-    _parser->add (new OptionOneParam (DSK::STR_DATABASE,    "database",         true));
-    _parser->add (new OptionOneParam (DSK::STR_SOLID_KMERS, "solid kmers file", false));
+    _parser->add (new OptionOneParam (DSK::STR_URI_DATABASE,    "database",         true));
+    _parser->add (new OptionOneParam (DSK::STR_URI_SOLID_KMERS, "solid kmers file", false));
 }
 
 /*********************************************************************
@@ -346,7 +344,7 @@ void Bloocoo::execute ()
     // We set some attributes (shortcuts).
     /*************************************************/
     _kmerSize  = _input->getInt (DSK::STR_KMER_SIZE);
-    _solidFile = _input->getStr (DSK::STR_SOLID_KMERS);
+    _solidFile = _input->getStr (DSK::STR_URI_SOLID_KMERS);
 
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
@@ -355,7 +353,7 @@ void Bloocoo::execute ()
     LOCAL (bloom);
 
     //iterate over initial file
-    Bank inbank (_input->getStr(DSK::STR_DATABASE));
+    Bank inbank (_input->getStr(DSK::STR_URI_DATABASE));
 
     /*************************************************/
     // We create a sequence iterator for the bank
@@ -370,7 +368,7 @@ void Bloocoo::execute ()
     /*************************************************/
     // We create the corrected file
     /*************************************************/
-    string fileName = _input->getStr(DSK::STR_DATABASE) + "_corrected";
+    string fileName = _input->getStr(DSK::STR_URI_DATABASE) + "_corrected";
     Bank outbank (fileName);
 
     u_int64_t total_nb_errors_corrected = 0;
@@ -381,12 +379,7 @@ void Bloocoo::execute ()
     {
         TIME_INFO (_timeInfo, "sequences correction");
 
-        /** We create a shared synchronizer for writing in output file. */
-        ISynchronizer* synchro = System::thread().newSynchronizer();
-
-        _dispatcher->iterate (*itSeq,  CorrectReads (*bloom, outbank, *this, synchro, total_nb_errors_corrected));
-
-        delete synchro;
+        _dispatcher->iterate (*itSeq,  CorrectReads (*bloom, outbank, *this, total_nb_errors_corrected));
     }
 
     /*************************************************/
@@ -426,7 +419,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     LOCAL (itKmers);
 
     /** We instantiate the bloom object. */
-    BloomBuilder builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER));
+    BloomBuilder builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER), _input->getInt(Tool::STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build ();
 
     /** We return the created bloom filter. */

@@ -5,6 +5,7 @@
  *   Copyright (c) INRIA, CeCILL license, 2013                               *
  *****************************************************************************/
 
+#include <BankConverter.hpp>
 #include <DSK.hpp>
 #include <Bloocoo.hpp>
 #include <gatb/system/impl/System.hpp>
@@ -23,18 +24,19 @@ int main (int argc, char* argv[])
     // We define a try/catch block in case some method fails
     try
     {
-        misc::impl::ToolComposite tool ("root");
+        misc::impl::ToolComposite tool;
 
-        tool.add (new DSK());
-        tool.add (new Bloocoo());
+        tool.add (new BankConverter ());
+        tool.add (new DSK           ());
+        tool.add (new Bloocoo       ());
 
         tool.run (argc, argv);
     }
 
     catch (misc::impl::OptionFailure& e)
     {
-        if (e.getParser().saw("-help")) {   e.getParser().displayHelp   (stdout);   }
-        else                            {   e.getParser().displayErrors (stdout);   }
+        e.getParser().displayErrors (stdout);
+        e.getParser().displayHelp   (stdout);
         return EXIT_FAILURE;
     }
 
