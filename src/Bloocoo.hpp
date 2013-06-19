@@ -32,6 +32,9 @@ using namespace gatb::core::tools;
 using namespace gatb::core::bank;
 using namespace gatb::core::kmer::impl;
 
+using namespace gatb::core::system;
+using namespace gatb::core::system::impl;
+
 /********************************************************************************/
 /* Class Bloocoo for read correction : takes as input a bag of solid kmers (dsk result),
  insert that in a bloom filter, and correct read form it*/
@@ -45,8 +48,16 @@ public:
     size_t          _kmerSize;
     std::string     _solidFile;
     uint64_t        _seq_num;
-
+    int            _nb_kmers_checked;
+    
+    int            _nb_passes_per_read;
+    
     IBank* _inputBank;
+
+    static const char* STR_NB_ITER_PER_READ;
+    static const char* STR_NB_VALIDATED_KMERS;
+    
+    IFile*      _errfile;
 
 public:
 
@@ -55,6 +66,7 @@ public:
 
 private:
 
+    
     /** */
     void execute ();
 
