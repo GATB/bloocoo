@@ -172,7 +172,7 @@ void print_nt_mat(int nt_mat[4]){
 // kmer_begin  = solid kmer at pos
 int aggressiveCorrection(Bloom<kmer_type> * _bloom , int pos, char *readseq, IFile* errfile, kmer_type kmer_begin, size_t  sizeKmer, int numseq,int nb_kmer_check,direction_t orientation )
 {
-    //printf("Start voting cprrection\n");
+    printf("Start voting cprrection\n");
 	int nt_mat [4] = {0, 0, 0, 0};
 
     //bool check = false;
