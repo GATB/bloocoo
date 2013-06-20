@@ -79,7 +79,7 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 /********************************************************************************/
 //fonctions for correction
 /********************************************************************************/
-
+///
 //ii  readseq  errfile  kmer_begin   kmer_end
 int twoSidedCorrection(Bloom<kmer_type> * _bloom , int pos, char *readseq, IFile* errfile, kmer_type kmer_begin,kmer_type kmer_end, size_t  sizeKmer, int numseq)
 {
