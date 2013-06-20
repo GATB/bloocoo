@@ -518,12 +518,11 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
     _seq_num = 0;
 
     /** We add options specific to this tool. */
-    _parser->add (new OptionOneParam (DSK::STR_KMER_SIZE,   "size of a kmer",   true));
-    _parser->add (new OptionOneParam (STR_URI_DATABASE,    "database",         true));   // not useful ?
-    _parser->add (new OptionOneParam (DSK::STR_URI_SOLID_KMERS, "solid kmers file", false));
-    _parser->add (new OptionOneParam (Bloocoo::STR_NB_ITER_PER_READ, "number of iterations per read", false,"3"));
-    _parser->add (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS, "number of kmers checked when correcting an error", false,"2"));
-
+    getParser()->add (new OptionOneParam (DSK::STR_KMER_SIZE,               "size of a kmer",   true));
+    getParser()->add (new OptionOneParam (DSK::STR_URI_DATABASE,            "database",         true));   // not useful ?
+    getParser()->add (new OptionOneParam (DSK::STR_URI_SOLID_KMERS,         "solid kmers file", false));
+    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_ITER_PER_READ,    "number of iterations per read", false,"3"));
+    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"2"));
 }
 
 /*********************************************************************
@@ -539,10 +538,10 @@ void Bloocoo::execute ()
     /*************************************************/
     // We set some attributes (shortcuts).
     /*************************************************/
-    _kmerSize  = _input->getInt (DSK::STR_KMER_SIZE);
-    _solidFile = _input->getStr (DSK::STR_URI_SOLID_KMERS);
-    _nb_kmers_checked = _input->getInt (STR_NB_VALIDATED_KMERS);
-    _nb_passes_per_read = _input->getInt (STR_NB_ITER_PER_READ);
+    _kmerSize           = getInput()->getInt (DSK::STR_KMER_SIZE);
+    _solidFile          = getInput()->getStr (DSK::STR_URI_SOLID_KMERS);
+    _nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
+    _nb_passes_per_read = getInput()->getInt (STR_NB_ITER_PER_READ);
     
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
@@ -551,7 +550,7 @@ void Bloocoo::execute ()
     LOCAL (bloom);
 
     //iterate over initial file
-    Bank inbank (_input->getStr(DSK::STR_URI_DATABASE));
+    Bank inbank (getInput()->getStr(DSK::STR_URI_DATABASE));
 
     /*************************************************/
     // We create a sequence iterator for the bank
@@ -566,47 +565,41 @@ void Bloocoo::execute ()
     /*************************************************/
     // We create the corrected file
     /*************************************************/
-    //string fileName = _input->getStr(DSK::STR_URI_DATABASE) + "_corrected";
-    
-    // default prefix is the reads file basename
-    char prefix[1024];
-    char *reads_path=strdup(_input->getStr(DSK::STR_URI_DATABASE).c_str());
-    std::string reads_name(basename(reads_path)); // posix basename() may alter reads_path
-    free(reads_path);
-    int lastindex = reads_name.find_last_of(".");
-    strcpy(prefix,reads_name.substr(0, lastindex).c_str());
-    
-    char fileName[1024];
-    sprintf(fileName,"%s_corrected.fasta",prefix);
-    
+
+    /** We get the basename from the provided URI (ie remove directory path and suffix). */
+    string prefix = System::file().getBaseName (getInput()->getStr(DSK::STR_URI_DATABASE));
+
+    /** We set the filename as the base name + a specific suffix. */
+    string fileName = prefix + string("_corrected.fasta");
+
     Bank outbank (fileName);
 
     u_int64_t total_nb_errors_corrected = 0;
 
     //file with list of errors, for testing purposes
-    char ferrfile[1024];
+    string ferrfile = prefix + string ("_bloocoo_corr_errs.tab");
 
-    sprintf(ferrfile,"%s%s",prefix,"_bloocoo_corr_errs.tab");
     _errfile = System::file().newFile (ferrfile, "wb");
+
     /*************************************************/
     // We iterate over sequences and correct them
     /*************************************************/
     {
-        TIME_INFO (_timeInfo, "sequences correction");
+        TIME_INFO (getTimeInfo(), "sequences correction");
 
      //   CorrectReads fct2(*bloom, outbank, *this,total_nb_errors_corrected) ;
      //   itSeq->iterate (fct2); //
         setDispatcher (new SerialCommandDispatcher());
         
-        _dispatcher->iterate (itSeq,  CorrectReads (*bloom, outbank, *this, total_nb_errors_corrected)); // not working ?
+        getDispatcher()->iterate (itSeq,  CorrectReads (*bloom, outbank, *this, total_nb_errors_corrected)); // not working ?
     }
 
     /*************************************************/
     // We gather some statistics.
     /*************************************************/
-    _info->add (1, "result");
-    _info->add (2, "nb errors corrected", "%ld", total_nb_errors_corrected);
-    _info->add (2, "corrected file",      fileName);
+    getInfo()->add (1, "result");
+    getInfo()->add (2, "nb errors corrected", "%ld", total_nb_errors_corrected);
+    getInfo()->add (2, "corrected file",      fileName);
 }
 
 /*********************************************************************
@@ -619,7 +612,7 @@ void Bloocoo::execute ()
 *********************************************************************/
 Bloom<kmer_type>* Bloocoo::createBloom ()
 {
-    TIME_INFO (_timeInfo, "fill bloom filter");
+    TIME_INFO (getTimeInfo(), "fill bloom filter");
 
     double lg2 = log(2);
     float NBITS_PER_KMER = log (16*_kmerSize*(lg2*lg2))/(lg2*lg2);
@@ -638,7 +631,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     LOCAL (itKmers);
 
     /** We instantiate the bloom object. */
-    BloomBuilder builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER), _input->getInt(Tool::STR_NB_CORES));
+    BloomBuilder builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER), getInput()->getInt(Tool::STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build ();
 
     /** We return the created bloom filter. */
