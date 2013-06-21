@@ -484,7 +484,7 @@ public:
     CorrectReads (Bloom<kmer_type>& bloom, Bank& outbank, Bloocoo & bloocoo, u_int64_t& nb_errors_corrected)
         : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
-          model(_bloocoo._kmerSize), itKmer(model)
+          model(_bloocoo._kmerSize), itKmer(model), _synchro(this->newSynchro())
     {}
 
     ~CorrectReads ()
@@ -500,6 +500,8 @@ public:
     KmerModel           model;
     KmerModel::Iterator itKmer;
 
+    ISynchronizer* _synchro;
+    ISynchronizer* getSynchro ()  { return _synchro; }
 
     u_int64_t&  _total_nb_errors_corrected;
     u_int64_t   _local_nb_errors_corrected;
