@@ -31,11 +31,6 @@
 
 #include <gatb/tools/math/Integer.hpp>
 
-#include <omptl/omptl_numeric>
-#include <omptl/omptl_algorithm>
-
-#include <omp.h>
-
 #include <libgen.h>
 
 #include <Bloocoo.hpp>
