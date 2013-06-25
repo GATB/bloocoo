@@ -1,0 +1,87 @@
+
+I) Creer un test
+1) Dans le dossier 'jobs', creer un dossier jobX, en copiant-collant un dossier
+   job déjà existant, chacun de ces dossier job représente une batterie de tests qui
+   pourront être appelé en parallèle via des qsub sur le cluster.
+2) Ces dossiers job doivent contenir un job.bash dont le contenu n'a pas besoin d'être changé.
+   Ce bash appelle le script python 'test.py' dans lesquelle sont décris les tests.
+   Les méthodes python utilisées pour effectué les tests sont décrite plus bas.
+3) Dans le fichier job.bash situé a la racine ajouté votre nouveau job:
+	cd jobs/jobX
+	qsub job.bash
+4) Sur le cluster, il suffit d'appelé le job.bash situé a la racine pour lancer
+   les tests. Les résultat seront contenus dans le dossier "test_result" dans
+   chaque dossier jobs/jobX.
+
+
+II) Description test.py
+1) Pour lancer un test, il faut appeler execute_test(), le test prend comme donnees les variable parametrable
+   décrite plus bas. Les appels successif a execute_test() ajouteront des donnees a la fin d'un tabbed file, tant
+   que le nom du fichier resultat ne change pas.
+   Le nom du fichier resultat peut changer volontairement lorsque le prefix_filename change ou involontairement
+   si cover ou kmer_size changent.
+2) Lorsque toutes les donnes souhaitee sont accumulees dans le tabbed file, il faut appele execute_graph() pour
+   transformer le tableau en graph. execute_graph() prend en argument le nom du script .R souhaiter, ce
+   fichier .R doit se trouver dans le dossier Rscripts.
+   Le tabbed file prit en compte pour creer le graph est le dernier cree par vos tests.
+3) Les resultats de tests se trouvent dans le dossier test_result, les tableaux sont dans le dossier tabs
+   et les graphs sont dans le dossier graphs.
+
+#Nom du fichier resultat:
+Le nom des tableaux/graphes est de la forme prefix_X_cY_kZ.png
+prefix: contenue dans la variable 'result_filename_prefix', ce prefix vous permet de gerer vos fichier resultat
+	selon la valeur que vous tester (error rate, threshold...)
+X: nom du genome, si il n'y a rien alors c'est un genome aleatoire
+Y: la couverture reelle (kmer)
+Z: la taille des kmer
+
+Ex: bloocootest_threshold_ecoli_c35_k30.png
+
+
+
+#Variables parametrables:
+p = {
+	"genome_filename": "",
+	"genome_size": 5000,
+	"reads_size": 100,
+	"cover": 30,
+	"kmer_size": 30,
+	"coverage_threshold": 4,
+	"error_rate": 0.01,
+	"result_filename_prefix": "bloocoo_test",
+	"R_script_filename": "rec_pre_vs_err.R",
+	"nb_iter": 2,
+	"nb_kmer_checked": 2,
+}
+Ce hash contient toutes variables susceptibles de modifier la correction effectué
+par Bloocoo. Il doit être systématiquement passé en paramètre des méthodes de tests.
+Description:
+	- genome_filename:
+		Le nom du fichier génome à utiliser. Le fichier génome doit se trouver dans le dossier 'genomes'.
+		Si le nom du fichier est vide ("") alors un genome aléatoire sera générer.
+	- genome_size:
+		Seulement utiliser pour un génome aléatoire sinon genome_size est déterminé par la taille
+		du fichier du genome.
+	- reads_size:
+		La taille des reads lorsque le genome est découpé.
+	- cover:
+		La couverture des reads souhaitée.
+	- kmer_size:
+		La taille des kmers.
+	- coverage_threshold:
+		Le seuil du filtre de bloom de Bloocoo qui détermine si un kmer est fiable ou non.
+	- error_rate:
+		Le taux d'erreur injecté dans les reads lors du découpage du genome.
+	- result_filename_prefix:
+		Le début du nom du fichier résultat lors des appels a execute_test(), par exemple si on
+		test le seuil on mettra bloocoo_test_seuil, si on test le taux d'erreur on mettra test_err, etc...
+	- R_script_filename:
+		Le nom du script R à utiliser pour générer un graphe à partir du fichier tableau résultat.
+		Ce fichier doit être dans le dossier 'Rscripts'.
+	- nb_iter:
+		Le nombre de fois que les algos de correction vont être appliqué successivement par Bloocoo.
+	- nb_kmer_checked:
+		Le nombre de kmer à vérifier pour les algos de correction avancée, un plus grand nombre améliore la précision
+		mais augmente le temps de calcul.
+		
+
