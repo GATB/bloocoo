@@ -1059,7 +1059,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     LOCAL (itKmers);
 
     /** We instantiate the bloom object. */
-    BloomBuilder builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER), getInput()->getInt(Tool::STR_NB_CORES));
+    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER), getInput()->getInt(Tool::STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build ();
 
     /** We return the created bloom filter. */
