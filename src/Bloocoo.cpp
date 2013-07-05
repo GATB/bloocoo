@@ -993,7 +993,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
 
     u_int64_t solidFileSize = (System::file().getSize(_solidFile) / sizeof (kmer_type));
 
-    u_int64_t estimatedBloomSize = solidFileSize * NBITS_PER_KMER;
+    u_int64_t estimatedBloomSize = (u_int64_t) ((double)solidFileSize * NBITS_PER_KMER);
     if (estimatedBloomSize ==0 ) { estimatedBloomSize = 1000; }
 
     /** We create the kmers iterator from the solid file. */
