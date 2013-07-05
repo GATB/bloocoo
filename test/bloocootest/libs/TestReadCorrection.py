@@ -26,7 +26,8 @@ class TestReadCorrection:
 		nb_iter = str(params["nb_iter"])
 		nb_kmer_checked = str(params["nb_kmer_checked"])
 		genome_filename = str(params["genome_filename"])
-
+		
+		
 		#Mutaread
 		if genome_filename == "":
 			#Generation d'un genome aleatoirement, le genome est contenu dans le fichier alea.seq
@@ -36,7 +37,7 @@ class TestReadCorrection:
 			os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
 		else:
 			os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
-
+		
 		#Bloocoo correction
 		t = time.time()
 		#command = ./Bloocoo  datatest/errm.fasta   31 -nks 3 -nb-iter 2 -nkmer-checked 0
@@ -57,12 +58,12 @@ class TestReadCorrection:
 		TestReadCorrection.remove_file("sorted_"+err_tab_filename)
 		TestReadCorrection.remove_file("sorted_"+corrected_tab_filename)
 		TestReadCorrection.remove_file("test_diff_result.temp")
-		TestReadCorrection.remove_file("reads_bloocoo_corr_errs.tab")
-		TestReadCorrection.remove_file("reads_errs.tab")
+		#TestReadCorrection.remove_file("reads_bloocoo_corr_errs.tab")
+		#TestReadCorrection.remove_file("reads_errs.tab")
 		TestReadCorrection.remove_file("comm.temp")
 		TestReadCorrection.remove_file("tmp.binary")
 		TestReadCorrection.remove_file("tmp.solid")
-		TestReadCorrection.remove_file("reads.fasta")
+		#TestReadCorrection.remove_file("reads.fasta")
 		
 	@staticmethod
 	def remove_file(filename):

@@ -15,7 +15,7 @@ p = {
 	"result_filename_prefix": "bloocoo_test",
 	"R_script_filename": "rec_pre_vs_err.R",
 	"nb_iter": 2,
-	"nb_kmer_checked": 2,
+	"nb_kmer_checked": 4,
 }
 
 
@@ -23,7 +23,7 @@ p = {
 
 for kmer_size in [30]:
 	for cover in [30]:
-		for genome_filename in ["ecoli.fasta"]:
+		for genome_filename in [""]:
 		
 			p["genome_filename"] = genome_filename
 			p["kmer_size"] = kmer_size
@@ -38,7 +38,7 @@ for kmer_size in [30]:
 			p["coverage_threshold"] = 4
 			p["R_script_filename"] = "rec_pre_vs_err.R"
 			#error_rates = [0.001, 0.01, 0.02, 0.03, 0.05]
-			error_rates = [0.01, 0.03]
+			error_rates = [0.01]
 
 			for error_rate in error_rates:
 				p["error_rate"] = error_rate

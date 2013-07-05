@@ -58,7 +58,8 @@ public:
     static const char* STR_NB_VALIDATED_KMERS;
     
     IFile*      _errfile;
-
+	std::vector<int> corrected_pos;
+	
 public:
 
     /** */
@@ -72,6 +73,8 @@ private:
 
     /** */
     virtual collections::impl::Bloom<kmer_type>* createBloom ();
+    
+    
 };
 
 /********************************************************************************/

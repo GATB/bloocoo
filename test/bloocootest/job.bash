@@ -10,5 +10,3 @@ source /local/env/envR
 cd jobs/job1
 bash job.bash
 
-cd ../job2
-bash job.bash
