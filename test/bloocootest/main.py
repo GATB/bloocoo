@@ -10,8 +10,8 @@ params = {
 	"kmer_size": int(sys.argv[5]),
 	"coverage_threshold": int(sys.argv[6]),
 	"error_rate": float(sys.argv[7]),
-	"nb_iter": int(sys.argv[8]),
-	"nb_kmer_checked": int(sys.argv[9]),
+	"nb_kmer_checked": int(sys.argv[8]),
+	"regenerate_reads": sys.argv[9],
 	"genome_filename": "",
 }
 

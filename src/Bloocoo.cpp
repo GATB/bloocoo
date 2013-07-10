@@ -36,6 +36,8 @@
 #include <Bloocoo.hpp>
 #include <DSK.hpp>
 
+#include <sstream> //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! for test only
+
 // We use the required packages
 using namespace std;
 
@@ -74,515 +76,21 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 /********************************************************************************/
 //fonctions for correction
 /********************************************************************************/
-//int voteCorrection(Bloom<kmer_type> * _bloom , int pos, char *readseq, IFile* errfile, kmer_type kmer_begin, size_t sizeKmer, int numseq, int nb_kmer_check);
-
-typedef enum direction
-{
-    LEFT,
-    RIGHT
-} direction_t;
-
-
-#define NDEB -1
-
-kmer_type codeSeedBin(KmerModel* model, int sizeKmer, kmer_type* kmer, int nt, direction_t direction){
-	kmer_type temp_kmer;
-	char binrev[4] = {2,3,0,1};
-	
-	if(direction == RIGHT){
-		temp_kmer = model->codeSeedRight(*kmer, nt, Data::INTEGER, KMER_DIRECT);
-	}
-	else{
-		kmer_type kmer_end_rev = revcomp(*kmer, sizeKmer);
-		temp_kmer = model->codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER, KMER_DIRECT);
-		temp_kmer = revcomp(temp_kmer, sizeKmer);
-	}
-	return temp_kmer; //min(temp_kmer, revcomp(temp_kmer, sizeKmer));
-}
-
-kmer_type codeSeedChar(KmerModel* model, int sizeKmer, kmer_type* kmer, char nt, direction_t direction){
-	return codeSeedBin(model, sizeKmer, kmer, (nt>>1)&3, direction);
-}
-
-
-
-//// print_agressive_votes
-//Debug function for agressive correction, print the votes tab
-void print_agressive_votes(int votes[4]){
-	char bin2NT[4] = {'A','C','T','G'};
-	printf("#############################################\n");
-	for(int i=0; i<4; i++){
-		printf("%c: %i\n", bin2NT[i], votes[i]);
-	}
-	printf("#############################################\n");
-}
-
-//print_votes
-//Debug function for vote correction, print the votes matrix
-void print_votes(int votes[][4], int nb_column){
-	char bin2NT[4] = {'A','C','T','G'};
-	printf("#############################################\n");
-	for(int nt=0; nt<4; nt++){
-		printf("%c  ", bin2NT[nt]);
-		for(int i=0; i<nb_column; i++){
-			printf("%i ", votes[i][nt]);
-		}
-		printf("\n");
-	}
-	printf("#############################################\n");
-}
-
-
-void print_read_correction_state(Bloom<kmer_type> * _bloom, KmerModel* model, int sizeKmer, Sequence& s, int seq_num){
-	KmerModel::Iterator itKmer2 (*model);
-	kmer_type kmer, kmer_min;
-	
-	itKmer2.setData (s.getData(),KMER_DIRECT);
-	int i3=0;
-	printf("\nread correction state (%i):\n", seq_num);
-	printf("\t%s\n", s.getDataBuffer());
-	printf("\t");
-	for (itKmer2.first(); !itKmer2.isDone(); itKmer2.next(),i3++){
-		kmer = *itKmer2;
-		kmer_min = std::min(  revcomp (kmer, sizeKmer),kmer );
-		if (_bloom->contains(kmer_min)){
-			printf("1");
-		}
-		else{
-			printf("0");
-		}
-	}
-	printf("\n");
-}
-
-void print_read_if_not_fully_corrected(Bloom<kmer_type> * _bloom, KmerModel* model, int sizeKmer, Sequence& s, int seq_num){
-	std::string read_state = "";
-	std::string normal_state = "";
-	KmerModel::Iterator itKmer2 (*model);
-	kmer_type kmer, kmer_min;
-	
-	itKmer2.setData (s.getData(),KMER_DIRECT);
-	int i3=0;
-	//printf("\nread correction state (%i):\n", seq_num);
-	//printf("\t%s\n", s.getDataBuffer());
-	//printf("\t");
-	for (itKmer2.first(); !itKmer2.isDone(); itKmer2.next(),i3++){
-		normal_state += "1";
-		kmer = *itKmer2;
-		kmer_min = std::min(  revcomp (kmer, sizeKmer),kmer );
-		if (_bloom->contains(kmer_min)){
-			read_state += "1";
-		}
-		else{
-			read_state += "0";
-		}
-	}
-	if(normal_state.compare(read_state) != 0){
-		print_read_correction_state(_bloom, model, sizeKmer, s, seq_num);
-	}
-	
-}
-
-//// mutate_kmer
-// fonction to mutate kmer : takes kmer, pos (de la fin ,0-based), and nt (nt = 0,1,2ou 3) 
-// par exemple  kmer ,2 , C    avec kmer =  AAAAAAAAAA
-//
-// return : 
-// AAAAAAACAA
-void mutate_kmer(kmer_type * kmer, int pos, char nt)
-{
-    kmer_type reset_mask =  ~((kmer_type)3 << (pos*2));
-    kmer_type set_mask =  ((kmer_type)nt) << (pos*2);
-    *kmer = (*kmer & reset_mask )  | set_mask;
-}
-
-bool is_pos_corrected(std::vector<int>* corrected_pos, int pos){
-	return std::find(corrected_pos->begin(), corrected_pos->end(), pos) != corrected_pos->end();
-}
-
-int apply_correction(char *readseq, IFile* errfile, int numseq, int pos, int good_nt, std::vector<int>* corrected_pos){
-	if(is_pos_corrected(corrected_pos, pos)){
-		return 0;
-	}
-	char bin2NT[4] = {'A','C','T','G'};
-	
-	//printf("\t\t%i\t%i\t%c\t%c\n",numseq,pos,bin2NT[good_nt],readseq[pos]);
-	
-    errfile->print("%i\t%i\t%c\t%c\n",numseq,pos,bin2NT[good_nt],readseq[pos]);
-    readseq[pos] = bin2NT[good_nt]; //correc sequence in ram
-    // printf("error found pos %i  read %i\n",ii, _bloocoo._seq_num);
-    corrected_pos->push_back(pos);
-    return 1;
-}
-
-//// twoSidedCorrection
-// Method 1 for read correction
-// Correct an error in an untrusted zone of size=kmerSize
-int twoSidedCorrection(Bloom<kmer_type> * _bloom , int pos, char *readseq, IFile* errfile, kmer_type kmer_begin,kmer_type kmer_end, size_t  sizeKmer, int numseq, std::vector<int>* corrected_pos)
-{
-    
-    int original_nt = (readseq[pos-1]>>1)&3;
-
-    
-    char bin2NT[4] = {'A','C','T','G'};
-    char binrev[4] = {2,3,0,1};
-    
-    KmerModel model (sizeKmer);
-    
-    //kmer_begin is the last indexed kmer, test its right extension to get the snp
-    int good_nt;
-    
-    //kmer_begin.printASCII(sizeKmer);
-    //kmer_end.printASCII(sizeKmer);
-    kmer_type temp_kmer, kmer_query;
-    
-    int nb_alternative = 0;
-
-    for(int nt=0; nt<4; nt++){
-		if(nt == original_nt){
-			continue;
-		}
-		
-		//Leftmost kmer check
-		temp_kmer = codeSeedBin(&model, sizeKmer, &kmer_begin, nt, RIGHT);
-		kmer_query = min(temp_kmer, revcomp(temp_kmer, sizeKmer));
-        //temp_kmer = model.codeSeedRight (kmer_begin, nt, Data::INTEGER);
-        //printf("Left most Kmer: "); temp_kmer.printASCII(sizeKmer);
-        //temp_kmer.printASCII(sizeKmer);
-        
-		//kmer is indexed
-        if(_bloom->contains(kmer_query)){
-            
-            //Rightmost kmer check
-            //kmer_end_rev =revcomp(kmer_end, sizeKmer);
-            //temp_kmer = model.codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER);
-            temp_kmer = codeSeedBin(&model, sizeKmer, &kmer_end, nt, LEFT);
-            kmer_query = min(temp_kmer, revcomp(temp_kmer, sizeKmer));
-            //printf("Right most Kmer: "); temp_kmer.printASCII(sizeKmer);
-            
-            if(_bloom->contains(kmer_query)){
-                nb_alternative += 1;
-                good_nt = nt;
-            }
-        }
-    }
-    
-    if(nb_alternative == 1)
-    {
-        return apply_correction(readseq, errfile, numseq, pos-1, good_nt, corrected_pos);
-    }
-    
-    //printf("\t\tfailed\n");
-    return 0;
-    
-}
 
 
 
 
-//// aggressiveCorrection
-// Method 2 for read correction
-// This method can correct an error in an untrusted zone of size > kmerSize (close errors)
-//
-// nb_kmer_check the number of additional kmers checked
-// pos = position of the solid kmer next to the untrusted zone
-// kmer_begin  = solid kmer at pos
-int aggressiveCorrection(Bloom<kmer_type> * _bloom , int pos, char *readseq, IFile* errfile, kmer_type kmer_begin, size_t  sizeKmer, int numseq,int nb_kmer_check,direction_t orientation, std::vector<int>* corrected_pos)
-{
-
-    //printf("Start agresseive correction\n");
-	int votes [4] = {0, 0, 0, 0};
-
-    int good_nt;
-	char nt_temp;
-    
-    char bin2NT[4] = {'A','C','T','G'};
-    //char binrev[4]    = {2,3,0,1};
-    
-    //char revASCII [256];
-    //revASCII['A']= 'T';
-    //revASCII['T']= 'A';
-    //revASCII['C']= 'G';
-    //revASCII['G']= 'C';
-    
-    KmerModel model (sizeKmer);
-    
-    kmer_type temp_kmer, kmer_query;
-    
-    
-    int original_nt;
-    if(orientation ==RIGHT)
-    {
-        original_nt = (readseq[pos+sizeKmer]>>1)&3;
-    }
-    else
-    {
-    	original_nt = (readseq[pos-1]>>1)&3;
-    }
-        
-    //printf("original nt: %c", bin2NT[original_nt]);
-    for(int nt=0; nt<4; nt++)
-    {
-		if(nt == original_nt){
-			continue;
-		}
-				
-		//printf("\tTest with nt: %c\n", bin2NT[nt]);
-		//printf("\t\tkmer begin is: ");
-		//kmer_begin.printASCII(sizeKmer);
-
-		temp_kmer = codeSeedBin(&model, sizeKmer, &kmer_begin, nt, orientation);
-        
-        //temp_kmer.printASCII(sizeKmer);
-        kmer_query = min(temp_kmer, revcomp(temp_kmer, sizeKmer));
-        
-        if(_bloom->contains(kmer_query)) //kmer is indexed
-        {
-        	//printf("\t\t\t%c first in bloom  ", bin2NT[nt]);
-			votes[nt] += 1;
-        }
-        else{
-        	continue;
-        }
-
-				//printf("\t\t");
-				//temp_kmer.printASCII(sizeKmer);
-
-		for (int ii=0; ii<nb_kmer_check; ii++)
-		{
-		    
-		    //   printf("checking kmer %i \n",ii);
-		    //kmer_begin = temp_kmer;
-		    
-		    // kmer_begin.printASCII(sizeKmer);
-		    
-		    if(orientation == RIGHT)
-		    {
-		        nt_temp = readseq[pos+sizeKmer+1+ii];
-		    }
-		    else
-		    {
-		        nt_temp = readseq[pos-2-ii];
-		    }
-		    
-		    temp_kmer = codeSeedChar(&model, sizeKmer, &temp_kmer, nt_temp, orientation);
-			
-				//printf("\t\t");
-				//temp_kmer.printASCII(sizeKmer);
-		    
-		    kmer_query = min(temp_kmer, revcomp(temp_kmer, sizeKmer));
-		    if(_bloom->contains(kmer_query)) //kmer is indexed
-		    {
-		    	//printf("\t\t\t%c in bloom  ", bin2NT[nt]); temp_kmer.printASCII(sizeKmer);
-		        votes[nt] += 1;
-				//print_agressive_votes(votes);
-		    }
-		    
-		}
-    }
-
-    //print_agressive_votes(votes);
-
-	//Searching max score in votes
-	int max_score = votes[0];
-	for(int i=1; i<4; i++){
- 		if(votes[i] > max_score){
-			max_score = votes[i];
-		}
-	}
-
-	int t = (nb_kmer_check*25)/100;
-	t = max(1, t);
-	if(max_score < t){
-		//printf("\t\tfailed\n");
-		return 0;
-	}
-	
-	//printf("max: %i\n", max_score);
-
-	//We have the max score in votes, now we have to check if this score
-	//is uniq or if more than one nt has the max score
-	bool nb_max_score = 0;
-
-	for(int i=0; i<4; i++){
- 		if(votes[i] == max_score){
-			nb_max_score += 1;
-			good_nt = i;
-		}
-	}
-
-	//printf("good_nt: %i, nb_max_score: %i\n", good_nt, nb_max_score);
-
-	//if max score is uniq we can correct the sequence
-	//else if nb_nt_max > 1 then there are more than one candidate for the correction
-	//so we cannot determine a good correction, the correction is cancelled.
-	if(nb_max_score == 1){
-
-		
-        int pos_corrigee;
-        
-        if(orientation ==RIGHT)
-        {
-            pos_corrigee= pos+sizeKmer;
-        }
-        else
-        {
-            pos_corrigee = pos-1;
-            
-        }
-        
-        
-		/*
-        if(numseq ==NDEB) printf("Corr validee pos %i good nt %c \n",pos_corrigee,bin2NT[good_nt]);
-        //printf("Corr validee pos %i good nt %c \n",pos_corrigee,bin2NT[good_nt]);
-        errfile->print("%i\t%i\t%c\t%c\n",numseq,pos_corrigee  ,bin2NT[good_nt], readseq[pos_corrigee]);
-        
-        //print_agressive_votes(votes);
-        printf("\t\t%i\t%i\t%c\t%c   with   (max_score: %i)  (mini: %i)   (nb_kmer_check: %i)\n",numseq,pos_corrigee  ,bin2NT[good_nt], readseq[pos_corrigee], max_score, t, nb_kmer_check);
-        
-        readseq[pos_corrigee ]=bin2NT[good_nt]; //correc sequence in ram
-        */
-        return apply_correction(readseq, errfile, numseq, pos_corrigee, good_nt, corrected_pos);
-	}
-    
-    //printf("\t\tfailed\n");
-    return 0;
-    
-}
+#define PRINT_DEBUG 0
 
 
-//// voteCorrection
-// Method 3 for read correction
-// This method is used if the method 2 fails to correct an error
-//
-// nb_kmer_check the number of additional kmers checked
-// pos: the last trusted position in readseq before the untrusted zone
-// kmer_begin: solid kmer at pos, it's the last trusted kmer before the untrusted zone
-int voteCorrection(Bloom<kmer_type> * _bloom , int pos, char *readseq, IFile* errfile, kmer_type kmer_begin, size_t sizeKmer, int numseq, int nb_kmer_check, std::vector<int>* corrected_pos)
-{
-	
-    //printf("Start voting correction\n");
 
-    int good_nt;
-    char bin2NT[4] = {'A','C','T','G'};
-    KmerModel model (sizeKmer);
-    kmer_type current_kmer, kmer_query, mutated_kmer;
 
-	int nb_column = nb_kmer_check + sizeKmer;
-	int votes[nb_column][4];
-	for (int i = 0; i < nb_column; i++) {
-		for (int nt=0; nt < 4; nt++) {
-			votes[i][nt] = 0;
-		}
-	}
-	
-	//kmer_begin.printASCII(sizeKmer);
-	current_kmer = kmer_begin;
 
-	for(int i=0; i < nb_kmer_check; i++){
 
-		// (pos+1) is the first untrusted base
-		int read_pos = (pos+1) + i;
-		//current_kmer.printASCII(sizeKmer);
-		//current_kmer = codeSeedChar(&model, sizeKmer, &current_kmer, readseq[read_pos+(sizeKmer-1)], RIGHT);
-		current_kmer = model.codeSeedRight(current_kmer, readseq[read_pos+(sizeKmer-1)], Data::ASCII, KMER_DIRECT);
-		//current_kmer.printASCII(sizeKmer);
-		kmer_query = min(current_kmer, revcomp(current_kmer, sizeKmer));
-		if(_bloom->contains(kmer_query)){
-		    continue;
-		}
-		if(is_pos_corrected(corrected_pos, read_pos)){
-			continue;
-		}
-				
-		for(int kpos=0; kpos < sizeKmer; kpos++){
-			int original_nt = (readseq[read_pos+kpos]>>1)&3; //NT2bin ModelAbstract
-			//printf("original_nt: %i\n", original_nt);
-    		for(int nt=0; nt<4; nt++){
-				if(nt == original_nt){
-					continue;
-				}
-				//printf("\t%i\n", nt);
-				mutated_kmer = current_kmer;
-				mutate_kmer(&mutated_kmer, sizeKmer-1-kpos, nt);
-				//mutated_kmer.printASCII(sizeKmer);
-				
-				/*
-				printf("mutate at %i with %c\n", sizeKmer-1-kpos, bin2NT[nt]);
-				printf("curre_kmer: ");
-				current_kmer.printASCII(sizeKmer);
-				printf("mutated_kmer: ");
-				mutated_kmer.printASCII(sizeKmer);
-				printf("\n");
-				*/
-				
-				kmer_query = min(mutated_kmer, revcomp(mutated_kmer, sizeKmer));
-				if(_bloom->contains(kmer_query))
-				{
-				    votes[i+kpos][nt] += 1;
-					//print_votes(votes);
-				}
-    		}
-		}
-	}
 
-	//print_votes(votes, nb_column);
 
-	//Search max vote in the matrix
-	int vote, maxVote = 0;
-	for (int i = 0; i < nb_column; i++) {
-		for (int nt=0; nt < 4; nt++) {
-			vote = votes[i][nt];
-			if (vote > maxVote) {
-				maxVote = vote;
-			}
-		}
-	}
 
-	int t = (nb_kmer_check*25)/100;
-	//t = max(2, t);
-	t = max(2, nb_kmer_check);
-	if(maxVote < t){
-		//printf("\t\tfailed\n");
-		return 0;
-	}
-	
-	//printf("max vote: %i", maxVote);
-	int nb_alternative, pos_corrigee;
-	int nb_correction = 0;
 
-	
-	
-	//For each column in the matrix, if the max vote is find and is uniq we can apply the correction
-	for (int i = 0; i < nb_column; i++) {
-		nb_alternative = 0;
-		for (int nt=0; nt < 4; nt++) {
-			vote = votes[i][nt];
-			if (vote == maxVote) {
-				nb_alternative += 1;
-				good_nt = nt;
-			}
-		}
-		if(nb_alternative == 1){
-			pos_corrigee = (pos+1) + i;
-			/*
-			printf("\t\t%i\t%i\t%c\t%c   with   (max_score: %i)  (mini: %i)   (nb_kmer_check: %i)\n",numseq,pos_corrigee  ,bin2NT[good_nt], readseq[pos_corrigee], maxVote, t, nb_kmer_check);
-			errfile->print("%i\t%i\t%c\t%c\n",numseq,pos_corrigee  ,bin2NT[good_nt], readseq[pos_corrigee]);
-			readseq[pos_corrigee] = bin2NT[good_nt];*/
-			nb_correction += apply_correction(readseq, errfile, numseq, pos_corrigee, good_nt, corrected_pos);
-		}
-	}
-
-    return nb_correction;
-    
-}
-
-void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction){
-    *_local_nb_errors_corrected += nb_errors_corrected;
-    if(nb_errors_corrected > 0){
-    	*continue_correction = true;
-    }
-}
 
 
 
@@ -602,8 +110,9 @@ public:
         // _bloom   is the bloom filter containing the solid kmers
         // _bloom.contains(kmer)  to ask if it contains a kmer
         
-        _bloocoo.corrected_pos.clear();
+        _bloocoo._corrected_pos.clear();
         
+        if(PRINT_DEBUG){	_bloocoo.__badReadStack = "\n\n\n";	}
         
         //char bin2NT[4] = {'A','C','T','G'};
         //char bin2NTrev[4] = {'T','G','A','C'};
@@ -613,7 +122,6 @@ public:
         
         char * readseq = s.getDataBuffer(); // the nucleotide sequence of the read
         size_t sizeKmer = _bloocoo._kmerSize;
-        IFile* errfile = _bloocoo._errfile;
         
         //int nbPasses = _bloocoo._nb_passes_per_read;
         int max_nb_kmers_checked = _bloocoo._nb_kmers_checked;
@@ -626,269 +134,172 @@ public:
         //int pass;
         //multiple passes per read
         bool continue_correction = true;
-        int nb_errors_cor = 0;
+        //int nb_errors_cor = 0;
         bool first_gap = true;
         int ii=0;
         int readlen = s.getDataSize();
         
-            kmer_type current_kmer;
-            kmer_type current_kmer_min;
-            //kmer_type previous_kmer = 0;
-            kmer_type kmer_begin = 0 ;
-            kmer_type kmer_end = 0;
+        kmer_type current_kmer;
+        kmer_type current_kmer_min;
+        //kmer_type previous_kmer = 0;
+        kmer_type kmer_begin = 0 ;
+        kmer_type kmer_end = 0;
             
         //for (int pass=0; pass<3; pass++)
         while(continue_correction)
         {
             continue_correction = false;
-            nb_errors_cor = 0;
             first_gap = true;
             ii = 0;
-            //if(_bloocoo._seq_num ==NDEB) printf("---pass  %i---\n",pass);
             
-            //kmer_type temp_kmer;
+            itKmer.setData (s.getData(),KMER_DIRECT);
             
-
+            int untrusted_zone_size = 0;
+            int trusted_zone_size = 0;
             
-            itKmer.setData (s.getData(),KMER_DIRECT); //BUG ICI, si on met cette ligne en dehors du while ou ici, on a pas le même resultat
-            //itKmer.reset();
-            //int nb_alternatives_found = 0;
-            //kmer_type kmer_test, kmer_test_min;
-            //for each kmer in this Sequence
-            
-            // sets itKmer to iterate over all the kmers of the read s
-            
-            uint64_t tai_not_indexed = 0;
-            uint64_t tai_indexed = 0;
-            
-            
-            kmer_type* kmers[readlen-sizeKmer+1]; //Mettre en dehors du while dans une version final (attention dangereux), faire gaffe a ne jamais utiliser un kmer de ce tableau
-            										//avec un indice > ii
+            //Mettre en dehors du while dans une version final (attention dangereux), faire gaffe a ne jamais utiliser un kmer de ce tableau
+            //avec un indice > ii
+            kmer_type* kmers[readlen-sizeKmer+1]; 
+            										
             
             
             
-			//print_read_correction_state(&_bloom, &model, sizeKmer, s, _bloocoo._seq_num);
+			if(PRINT_DEBUG){ _bloocoo.print_read_correction_state(&model, s, _bloocoo._seq_num); }
 		      
             // We iterate the kmers of this sequence
             for (itKmer.first(); !itKmer.isDone(); itKmer.next(),ii++)
             {
+            	int nb_errors_cor = 0;
+            	
             	current_kmer = *itKmer;
             	kmers[ii] = &(*itKmer);
             	
-                //graine est kmer qui commenece à ii,  dans le sens du read
-                //current_kmer est le min de graine avec son revcomp
-                
-                
-                //current_kmer.printASCII(sizeKmer);
                 current_kmer_min = min(revcomp(current_kmer, sizeKmer), current_kmer);
                 
+                //Si on veut checker le dernier kmer du read et qu'on est dans une zone untrusted alors on considere
+                //automatiquement ce dernier kmer comme untrusted et on laisse les démarches de correction de fin de read s'effectuer.
+                bool is_last_kmer_indexed_after_hole = (ii==readlen-sizeKmer && trusted_zone_size==0);
                 
-                if (_bloom.contains(current_kmer_min)) //kmer is solid
+                
+                if (!is_last_kmer_indexed_after_hole && _bloom.contains(current_kmer_min)) //kmer is solid
                 {
-                    tai_indexed++;
+                    trusted_zone_size += 1;
                     
-                    //En général, la correction est effectué quand il y a deux 1 après un trou, mais
-                    //il peux arriver qu'il y est un trou et un 1 en dernière position du read, dans ce cas là il faut
-                    //tout de même lancer la correction.
-                    bool is_last_kmer_indexed_after_hole = (ii==readlen-sizeKmer && tai_indexed==1);
-                    
-                    if(tai_indexed==2 || is_last_kmer_indexed_after_hole) //beginning of indexed zone
+					//beginning of indexed zone
+                    if(trusted_zone_size == 2) 
                     {
-                        //kmer_end = graine; // kmer_end should be first kmer indexed after a hole
                         kmer_end = *kmers[ii-1];
-                        if(is_last_kmer_indexed_after_hole){
-                        	kmer_end = *kmers[ii];
-                        	//kmer_end.printASCII(sizeKmer);
-                        	//ii+=1;
-                        }
-                        else{ 
-                        	//decommenter pour utiliser two-sided sinon two sided n'est pas appelé a cause du nouveau tai_indexed==2
-                        	//tai_not_indexed -= 1; 
-                        }
-                        //printf("\t\t");
-                        //kmer_end.printASCII(sizeKmer);
-                        //printf("\t\t");
-                        //revcomp(kmer_end, sizeKmer).printASCII(sizeKmer);
-                        //printf("%i %i %i", tai_not_indexed < sizeKmer, ii < sizeKmer, tai_not_indexed>0);
-                        //printf("taille not indexed: %i\n", tai_not_indexed);
                         
-                        //two-sided conservative correction
-                        // this should be an isolated error, middle of the read
-                        // if error at pos sizeKmer, could work in theory but would need kmer_begin+1
-                        if((tai_not_indexed == sizeKmer)  &&  (ii != sizeKmer)){
-                            if(_bloocoo._seq_num ==NDEB){printf(".. two sided  pos %i \n",ii); kmer_begin.printASCII(sizeKmer);}
-                            //printf("\t\ttwo sided %i\n", ii);
-                            //print_read_correction_state(&_bloom, &model, sizeKmer, s, _bloocoo._seq_num);
-                            
-                            int toto_ii = ii-1;
-							if(is_last_kmer_indexed_after_hole){toto_ii+=1;}
+                        if (untrusted_zone_size>1){
                         
-                            nb_errors_cor = twoSidedCorrection(& _bloom , toto_ii, readseq,errfile,  kmer_begin, kmer_end,   sizeKmer,  _bloocoo._seq_num, &_bloocoo.corrected_pos);
-                            update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                            /*if(nb_errors_cor > 0){
-                            	break;
-                            }*/
-                            //kmer_end = *kmers[5000];
-                            //kmer_end.printASCII(sizeKmer);
-                        }
-                        // an error at the beginning of the read : tai_not_indexed is smaller even for a single snp
-                        //and correct it from the right
-                        else if ((tai_not_indexed < sizeKmer) && first_gap && tai_not_indexed>1){
-                            //printf("\t\tagressive begin %i\n", ii);
-                            nb_checked = min(max_nb_kmers_checked, (int)tai_not_indexed);
-                            
-                            int toto_ii = ii-1;
-							if(is_last_kmer_indexed_after_hole){toto_ii+=1;}
-							
-                            nb_errors_cor = aggressiveCorrection(& _bloom , toto_ii , readseq, errfile,  kmer_end, sizeKmer, _bloocoo._seq_num, nb_checked ,LEFT, &_bloocoo.corrected_pos);
-                            update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                            
-                            if(nb_errors_cor == 0){
-                            	//printf("\t\tvote correction begin %i\n", ii);
-                            	nb_errors_cor = voteCorrection(& _bloom , 0, readseq, errfile,  *kmers[0], sizeKmer, _bloocoo._seq_num, nb_checked, &_bloocoo.corrected_pos);
-                            	update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                            }
-                            
-                            /*if(nb_errors_cor > 0){
-                            	break;
-                            }*/
-                            
-                            if(_bloocoo._seq_num ==NDEB){printf(".. aggressive correc begin  pos %i \n",ii);kmer_end.printASCII(sizeKmer);}
-                            
-                        }
-                        // use aggressive correct for close errors or error at beginning
-                        //2eme condition: cas ou une erreur de taille k que la two sided aurait pu corriger mais ce n'est pas possible actuellement vu qu'on a pas
-                        //kmer begin dans ce cas la (pour le left most kmer)
-                        else if (tai_not_indexed > sizeKmer){ //|| (sizeKmer==ii && (tai_not_indexed == sizeKmer))){
-                            nb_checked = min(max_nb_kmers_checked, (int) (tai_not_indexed-sizeKmer));
-                            
-                            if(_bloocoo._seq_num ==NDEB)
-                            {printf(".. aggressive correc pos %i left right  %lli %li \n",ii,tai_not_indexed,sizeKmer);kmer_end.printASCII(sizeKmer);}
-                            
-                            nb_errors_cor = 0;
-                            
-                            //if first gap, cannot correct from the left side of the gap
-                            if(!first_gap)
-                            {
-                            	//printf("\t\tagressive big hole 1 %i\n", ii);
-                            	//kmer_begin.printASCII(sizeKmer);
-                                nb_errors_cor = aggressiveCorrection(& _bloom , ii- tai_not_indexed -1 , readseq, errfile,  kmer_begin, sizeKmer, _bloocoo._seq_num, nb_checked ,RIGHT, &_bloocoo.corrected_pos);
-                            	update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                            
-                            	if(nb_errors_cor == 0){
-                            		//printf("\t\tvote correction big hole 1 %i\n", ii);
-                            		nb_errors_cor = voteCorrection(& _bloom , ii- tai_not_indexed -1, readseq, errfile,  kmer_begin, sizeKmer, _bloocoo._seq_num, nb_checked, &_bloocoo.corrected_pos);
-                            		update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                            	}
-                            	
-                            }
-                            
-                            if(nb_errors_cor == 0){
-                            	//printf("\t\tagressive big hole 2 %i\n", ii);
-                            	
-                            	int toto_ii = ii-1;
-								if(is_last_kmer_indexed_after_hole){toto_ii+=1;}
-							
-                            	nb_errors_cor = aggressiveCorrection(& _bloom , toto_ii , readseq, errfile,  kmer_end, sizeKmer, _bloocoo._seq_num, nb_checked ,LEFT, &_bloocoo.corrected_pos);
-                            	update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                            }
-                            
+                        	
+                        	/*
+		                    //two-sided conservative correction
+		                    // this should be an isolated error, middle of the read
+		                    // if error at pos sizeKmer, could work in theory but would need kmer_begin+1
+		                    if((untrusted_zone_size == sizeKmer)  &&  (ii != sizeKmer)){
+		                        
+		                        _bloocoo.__badReadStack += "\t\tTwo sided (hole size k)\n";
+
+		                        nb_errors_cor = twoSidedCorrection(& _bloom , ii-1, readseq,  kmer_begin, kmer_end);
+		                        //update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
+
+		                    }*/
+                        
                         	if(nb_errors_cor == 0){
-                        		//printf("\t\tvote correction big hole 2 %i\n", ii);
-                        		int vote_pos = ii - nb_checked;
-                        		nb_errors_cor = voteCorrection(& _bloom , vote_pos, readseq, errfile,  *kmers[vote_pos], sizeKmer, _bloocoo._seq_num, nb_checked, &_bloocoo.corrected_pos);
-                        		update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                        	}
-	                        /*if(nb_errors_cor > 0){
-	                        	break;
-	                        }*/
+                        	
+		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size);
+		                        nb_checked = max(nb_checked, 1);
+		                        
+		                        //if first gap, cannot correct from the left side of the gap
+		                        if(!first_gap)
+		                        {
+		                        
+		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 1 right)\n"; }
+		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii- untrusted_zone_size -1 , readseq,  kmer_begin, nb_checked , Bloocoo::RIGHT);
+		                            
+		                        }
+		                        
+		                        
+		                        if(nb_errors_cor == 0){
+		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 2 left)\n"; }
+		                        	nb_errors_cor = _bloocoo.aggressiveCorrection(ii-1 , readseq,  kmer_end, nb_checked , Bloocoo::LEFT);
+		                        }
+		                        
+				                if(nb_errors_cor == 0){
+				                	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tVote correction (big hole 2)\n"; }
+				                	nb_errors_cor = _bloocoo.voteCorrectionInUntrustedZone(ii- untrusted_zone_size, ii-2, readseq, kmers, nb_checked);
+				            	}
+                    	
+		                    
+		                    }
                         }
                         
                     }
                     
-                    if(tai_indexed==2){
+                    
+                    
+                    
+                    if(trusted_zone_size==2){
                     	first_gap = false;
                     }
                     
-                    if(_bloocoo._seq_num ==NDEB) {printf("1 pos %i  : ",ii); current_kmer.printASCII(sizeKmer); }
                     
                     ////////////traitement d'un faux positif du bloom isolé
-                    //   if(tai_indexed==1) tai_previous_break = tai_not_indexed; // begin of indexed zone    ( if tai_not_indexed ?)
-                    if (tai_indexed > 1) // do not reset  tai_not_indexed if a single positive (might be a FP)
+                    //   if(trusted_zone_size==1) tai_previous_break = untrusted_zone_size; // begin of indexed zone    ( if untrusted_zone_size ?)
+                    if (trusted_zone_size > 1) // do not reset  untrusted_zone_size if a single positive (might be a FP)
                     {
-                        tai_not_indexed = 0; //reset previous hole size
+                        untrusted_zone_size = 0; //reset previous hole size
                     }
-                    if (tai_indexed==1)// begin of indexed zone
+                    if (trusted_zone_size==1)// begin of indexed zone
                     {
-                        if(_bloocoo._seq_num ==NDEB) printf("not indexed %lli pos %i\n",tai_not_indexed,ii);
-                        tai_not_indexed++; //  treat a single solidkmer  as an erroneous kmer
+                        untrusted_zone_size++; //  treat a single solidkmer  as an erroneous kmer
                     }
                     //////////
                     
                     //version sans traitement du FP du bloom
-					//if(tai_indexed==1){
-					//	tai_not_indexed = 0;
+					//if(trusted_zone_size==1){
+					//	untrusted_zone_size = 0;
 					//}
                     
                 }
                 else //kmer contains an error
                 {
-                    if(_bloocoo._seq_num ==NDEB) {printf("0 pos %i  : ",ii); current_kmer.printASCII(sizeKmer); }
                     
-                    if(tai_indexed > 1) // begin of not indexed zone
+                    if(trusted_zone_size > 1) // begin of not indexed zone
                     {
                     	kmer_begin = *kmers[ii-1];
-                        //kmer_begin = previous_kmer ; //kmer_begin is the last kmer indexed before the hole
-                        if(_bloocoo._seq_num ==NDEB) printf("indexed %lli pos %i\n",tai_indexed,ii);
                         
                     }
-                    tai_not_indexed ++;
-                    tai_indexed =0;
+                    untrusted_zone_size ++;
+                    trusted_zone_size =0;
                     
                     //end of the read, we should treat this gap here correc snp with trad method
                     if(ii == (readlen-sizeKmer)){
-                        nb_checked = min(max_nb_kmers_checked, (int)tai_not_indexed);
-                        if(_bloocoo._seq_num ==NDEB) {printf("Correc right extrem %i ",ii);kmer_begin.printASCII(sizeKmer); }
-                        //printf("\t\tagressive end %i\n", ii);
-                        //printf("taille not indexed: %i\n", tai_not_indexed);
-                        nb_errors_cor = aggressiveCorrection(& _bloom , readlen - tai_not_indexed  - sizeKmer , readseq, errfile,  kmer_begin, sizeKmer, _bloocoo._seq_num, nb_checked ,RIGHT, &_bloocoo.corrected_pos);
-                        update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
+                        nb_checked = min(max_nb_kmers_checked, (int)untrusted_zone_size);
+                        if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (end)\n"; }
+                        nb_errors_cor = _bloocoo.aggressiveCorrection(readlen - untrusted_zone_size - sizeKmer , readseq,  kmer_begin, nb_checked , Bloocoo::RIGHT);
                             
                         if(nb_errors_cor == 0){
-                        	//printf("\t\tvote correction %i (start: %i) (nb_checked: %i)\n", ii, readlen - tai_not_indexed  - sizeKmer, nb_checked);
-                        	int vote_pos = readlen - tai_not_indexed - sizeKmer;
-                        	vote_pos = max(0, vote_pos);
-                        	
-                        	while(nb_errors_cor == 0 && vote_pos < (readlen-sizeKmer)){
-                        		//nb_errors_cor = voteCorrection(& _bloom , readlen - tai_not_indexed  - sizeKmer, readseq, errfile,  kmer_begin, sizeKmer, _bloocoo._seq_num, nb_checked);
-                        		nb_errors_cor = voteCorrection(& _bloom , vote_pos, readseq, errfile,  *kmers[vote_pos], sizeKmer, _bloocoo._seq_num, nb_checked, &_bloocoo.corrected_pos);
-                    			update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
-                    			vote_pos += nb_checked;
-                    			//printf("vote pos: %i\n", vote_pos);
-                    		}
+                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tVote correction (end)\n"; }
+							nb_errors_cor = _bloocoo.voteCorrectionInUntrustedZone(readlen - (untrusted_zone_size-1) - sizeKmer , readlen-sizeKmer, readseq, kmers, nb_checked);
                     	}
-                        /*if(nb_errors_cor > 0){
-                        	break;
-                        }*/
                         
                     }
                     
                 }
                 
-                //previous_kmer = current_kmer; // should be the kmer in its original sense
+                _bloocoo.update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
+                
             } // end of kmers iteration over the read
             
-            if(_bloocoo._seq_num ==NDEB)
-            {
-                if(tai_indexed)
-                    printf("indexed %lli pos %i\n",tai_indexed,ii);
-                else
-                    printf("not indexed %lli pos %i\n",tai_not_indexed,ii);
-            }
             
         }
         
-        //print_read_if_not_fully_corrected(&_bloom, &model, sizeKmer, s, _bloocoo._seq_num);
+        if(PRINT_DEBUG){ 
+        	//printf("%s", _bloocoo.__badReadStack.c_str());
+        	_bloocoo.print_read_if_not_fully_corrected(&model, s);
+        }
         
         //if (getSynchro()-)
         {
@@ -974,8 +385,8 @@ void Bloocoo::execute ()
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
     /*************************************************/
-    Bloom<kmer_type>* bloom = createBloom ();
-    LOCAL (bloom);
+    _bloom = createBloom ();
+    LOCAL (_bloom);
 
     //iterate over initial file
     Bank inbank (getInput()->getStr(DSK::STR_URI_DATABASE));
@@ -1019,7 +430,7 @@ void Bloocoo::execute ()
      //   itSeq->iterate (fct2); //
         setDispatcher (new SerialCommandDispatcher());
         
-        getDispatcher()->iterate (itSeq,  CorrectReads (*bloom, outbank, *this, total_nb_errors_corrected)); // not working ?
+        getDispatcher()->iterate (itSeq,  CorrectReads (*_bloom, outbank, *this, total_nb_errors_corrected)); // not working ?
     }
 
     /*************************************************/
@@ -1066,3 +477,654 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     return bloom;
 }
 
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+void Bloocoo::update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction){
+    *_local_nb_errors_corrected += nb_errors_corrected;
+    if(nb_errors_corrected > 0){
+    	*continue_correction = true;
+    }
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//// twoSidedCorrection
+// Method 1 for read correction
+// Correct an error in an untrusted zone of size=kmerSize
+int Bloocoo::twoSidedCorrection(int pos, char *readseq, kmer_type kmer_begin,kmer_type kmer_end)
+{
+    
+    int original_nt = (readseq[pos-1]>>1)&3;
+
+    
+    char bin2NT[4] = {'A','C','T','G'};
+    char binrev[4] = {2,3,0,1};
+    
+    KmerModel model (_kmerSize);
+    
+    //kmer_begin is the last indexed kmer, test its right extension to get the snp
+    int good_nt;
+    
+    //kmer_begin.printASCII(_kmerSize);
+    //kmer_end.printASCII(_kmerSize);
+    kmer_type temp_kmer, kmer_query;
+    
+    int nb_alternative = 0;
+
+    for(int nt=0; nt<4; nt++){
+		if(nt == original_nt){
+			continue;
+		}
+		
+		//Leftmost kmer check
+		temp_kmer = codeSeedBin(&model, &kmer_begin, nt, RIGHT);
+		kmer_query = min(temp_kmer, revcomp(temp_kmer, _kmerSize));
+        //temp_kmer = model.codeSeedRight (kmer_begin, nt, Data::INTEGER);
+        //printf("Left most Kmer: "); temp_kmer.printASCII(_kmerSize);
+        //temp_kmer.printASCII(_kmerSize);
+        
+		//kmer is indexed
+        if(_bloom->contains(kmer_query)){
+            
+            //Rightmost kmer check
+            //kmer_end_rev =revcomp(kmer_end, _kmerSize);
+            //temp_kmer = model.codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER);
+            temp_kmer = codeSeedBin(&model, &kmer_end, nt, LEFT);
+            kmer_query = min(temp_kmer, revcomp(temp_kmer, _kmerSize));
+            //printf("Right most Kmer: "); temp_kmer.printASCII(_kmerSize);
+            
+            if(_bloom->contains(kmer_query)){
+                nb_alternative += 1;
+                good_nt = nt;
+            }
+        }
+    }
+    
+    if(nb_alternative == 1)
+    {
+        return apply_correction(readseq, pos-1, good_nt);
+    }
+    
+    if(PRINT_DEBUG){ __badReadStack += "\t\tfailed\n"; }
+    //printf("\t\tfailed\n");
+    return 0;
+    
+}
+
+
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//// aggressiveCorrection
+// Method 2 for read correction
+// This method can correct an error in an untrusted zone of size > kmerSize (close errors)
+//
+// nb_kmer_check the number of additional kmers checked
+// pos = position of the solid kmer next to the untrusted zone
+// kmer_begin  = solid kmer at pos
+int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type kmer_begin,int nb_kmer_check,Direction direction)
+{
+
+    //printf("Start agresseive correction\n");
+	int votes [4] = {0, 0, 0, 0};
+
+    int good_nt;
+	char nt_temp;
+    
+    char bin2NT[4] = {'A','C','T','G'};
+    //char binrev[4]    = {2,3,0,1};
+    
+    //char revASCII [256];
+    //revASCII['A']= 'T';
+    //revASCII['T']= 'A';
+    //revASCII['C']= 'G';
+    //revASCII['G']= 'C';
+    
+    KmerModel model (_kmerSize);
+    
+    kmer_type temp_kmer, kmer_query;
+    
+    
+    int original_nt;
+    if(direction ==RIGHT)
+    {
+        original_nt = (readseq[pos+_kmerSize]>>1)&3;
+    }
+    else
+    {
+    	original_nt = (readseq[pos-1]>>1)&3;
+    }
+        
+    //printf("original nt: %c", bin2NT[original_nt]);
+    for(int nt=0; nt<4; nt++)
+    {
+		if(nt == original_nt){
+			continue;
+		}
+				
+		//printf("\tTest with nt: %c\n", bin2NT[nt]);
+		//printf("\t\tkmer begin is: ");
+		//kmer_begin.printASCII(_kmerSize);
+
+		temp_kmer = codeSeedBin(&model, &kmer_begin, nt, direction);
+        
+        //temp_kmer.printASCII(_kmerSize);
+        kmer_query = min(temp_kmer, revcomp(temp_kmer, _kmerSize));
+        
+        if(_bloom->contains(kmer_query)) //kmer is indexed
+        {
+        	//printf("\t\t\t%c first in bloom  ", bin2NT[nt]);
+			votes[nt] += 1;
+        }
+        else{
+        	continue;
+        }
+
+				//printf("\t\t");
+				//temp_kmer.printASCII(_kmerSize);
+
+		for (int ii=0; ii<nb_kmer_check; ii++)
+		{
+		    
+		    //   printf("checking kmer %i \n",ii);
+		    //kmer_begin = temp_kmer;
+		    
+		    // kmer_begin.printASCII(_kmerSize);
+		    
+		    if(direction == RIGHT)
+		    {
+		        nt_temp = readseq[pos+_kmerSize+1+ii];
+		    }
+		    else
+		    {
+		        nt_temp = readseq[pos-2-ii];
+		    }
+		    
+		    temp_kmer = codeSeedNT(&model, &temp_kmer, nt_temp, direction);
+			
+				//printf("\t\t");
+				//temp_kmer.printASCII(_kmerSize);
+		    
+		    kmer_query = min(temp_kmer, revcomp(temp_kmer, _kmerSize));
+		    if(_bloom->contains(kmer_query)) //kmer is indexed
+		    {
+		    	//printf("\t\t\t%c in bloom  ", bin2NT[nt]); temp_kmer.printASCII(_kmerSize);
+		        votes[nt] += 1;
+				//print_agressive_votes(votes);
+		    }
+		    
+		}
+    }
+
+    //print_agressive_votes(votes);
+
+	//Searching max score in votes
+	int max_score = votes[0];
+	for(int i=1; i<4; i++){
+ 		if(votes[i] > max_score){
+			max_score = votes[i];
+		}
+	}
+
+	int t = (nb_kmer_check*25)/100;
+	t = max(1, t);
+	if(max_score < t){
+		if(PRINT_DEBUG){ __badReadStack += "\t\tfailed\n"; }
+		//printf("\t\tfailed\n");
+		return 0;
+	}
+	
+	//printf("max: %i\n", max_score);
+
+	//We have the max score in votes, now we have to check if this score
+	//is uniq or if more than one nt has the max score
+	bool nb_max_score = 0;
+
+	for(int i=0; i<4; i++){
+ 		if(votes[i] == max_score){
+			nb_max_score += 1;
+			good_nt = i;
+		}
+	}
+
+	//printf("good_nt: %i, nb_max_score: %i\n", good_nt, nb_max_score);
+
+	//if max score is uniq we can correct the sequence
+	//else if nb_nt_max > 1 then there are more than one candidate for the correction
+	//so we cannot determine a good correction, the correction is cancelled.
+	if(nb_max_score == 1){
+
+        int pos_corrigee;
+        
+        if(direction ==RIGHT)
+        {
+            pos_corrigee= pos+_kmerSize;
+        }
+        else
+        {
+            pos_corrigee = pos-1;
+            
+        }
+        
+        return apply_correction(readseq, pos_corrigee, good_nt);
+	}
+    
+    if(PRINT_DEBUG){ __badReadStack += "\t\tfailed\n"; }
+    
+    return 0;
+    
+}
+
+
+
+
+int Bloocoo::voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked){
+	//printf("%i:    %i %i\n", _seq_num, start_pos, end_pos);
+	//printf("\n\t");
+	//(*kmers[start_pos]).printASCII(_kmerSize);
+	//(*kmers[end_pos]).printASCII(_kmerSize);
+	
+	//start_pos = max(0, start_pos);
+	
+	int nb_errors_cor = 0;
+	
+	while(nb_errors_cor == 0 && start_pos < end_pos){
+		int untrusted_zone_size = end_pos - start_pos;
+		int new_nb_checked = min(nb_kmer_checked, untrusted_zone_size);
+		if(new_nb_checked <= 0){ break; }
+		
+		if(PRINT_DEBUG){
+			std::ostringstream oss;
+			oss << start_pos;
+			std::ostringstream oss2;
+			oss2 << end_pos;
+		 	__badReadStack += "\tVote pos: " + oss.str() + " " + oss2.str() + "\n";
+		}
+		
+		nb_errors_cor = voteCorrection(start_pos, readseq, kmers, new_nb_checked);
+		start_pos += new_nb_checked;
+	}
+	
+	return nb_errors_cor;
+}
+		            		
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//// voteCorrection
+// Method 3 for read correction
+// This method is used if the method 2 fails to correct an error
+//
+// nb_kmer_check the number of additional kmers checked
+// pos: the last trusted position in readseq before the untrusted zone
+// kmer_begin: solid kmer at pos, it's the last trusted kmer before the untrusted zone
+int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check)
+{
+	
+	
+    //printf("Start voting correction\n");
+
+    int good_nt;
+    char bin2NT[4] = {'A','C','T','G'};
+    KmerModel model (_kmerSize);
+    kmer_type kmer_begin = *kmers[start_pos];
+    kmer_type current_kmer, kmer_query, mutated_kmer;
+
+	int nb_column = nb_kmer_check + _kmerSize;
+	int votes[nb_column][4];
+	for (int i = 0; i < nb_column; i++) {
+		for (int nt=0; nt < 4; nt++) {
+			votes[i][nt] = 0;
+		}
+	}
+	
+	//kmer_begin.printASCII(_kmerSize);
+	current_kmer = kmer_begin;
+
+	for(int i=0; i < nb_kmer_check; i++){
+
+		// (pos+1) is the first untrusted base
+		int read_pos = (start_pos+1) + i;
+		//current_kmer.printASCII(_kmerSize);
+		//current_kmer = codeSeedNT(&model, &current_kmer, readseq[read_pos+(_kmerSize-1)], RIGHT);
+		current_kmer = model.codeSeedRight(current_kmer, readseq[read_pos+(_kmerSize-1)], Data::ASCII, KMER_DIRECT);
+		//current_kmer.printASCII(_kmerSize);
+		kmer_query = min(current_kmer, revcomp(current_kmer, _kmerSize));
+		if(_bloom->contains(kmer_query)){
+		    continue;
+		}
+		if(is_pos_corrected(read_pos)){
+			continue;
+		}
+				
+		for(int kpos=0; kpos < _kmerSize; kpos++){
+			int original_nt = (readseq[read_pos+kpos]>>1)&3; //NT2bin ModelAbstract
+			//printf("original_nt: %i\n", original_nt);
+    		for(int nt=0; nt<4; nt++){
+				if(nt == original_nt){
+					continue;
+				}
+				//printf("\t%i\n", nt);
+				mutated_kmer = current_kmer;
+				mutate_kmer(&mutated_kmer, _kmerSize-1-kpos, nt);
+				//mutated_kmer.printASCII(_kmerSize);
+				
+				/*
+				printf("mutate at %i with %c\n", _kmerSize-1-kpos, bin2NT[nt]);
+				printf("curre_kmer: ");
+				current_kmer.printASCII(_kmerSize);
+				printf("mutated_kmer: ");
+				mutated_kmer.printASCII(_kmerSize);
+				printf("\n");
+				*/
+				
+				kmer_query = min(mutated_kmer, revcomp(mutated_kmer, _kmerSize));
+				if(_bloom->contains(kmer_query))
+				{
+				    votes[i+kpos][nt] += 1;
+					//print_votes(votes);
+				}
+    		}
+		}
+	}
+
+	//print_votes(votes, nb_column);
+
+	//Search max vote in the matrix
+	int vote, maxVote = 0;
+	for (int i = 0; i < nb_column; i++) {
+		for (int nt=0; nt < 4; nt++) {
+			vote = votes[i][nt];
+			if (vote > maxVote) {
+				maxVote = vote;
+			}
+		}
+	}
+
+	//int t = (nb_kmer_check*25)/100;
+	//t = max(2, t);
+	int t = max(1, nb_kmer_check);
+	if(maxVote < t){
+		if(PRINT_DEBUG){ __badReadStack += "\t\tfailed\n"; }
+		//printf("\t\tfailed\n");
+		return 0;
+	}
+	
+	//printf("max vote: %i", maxVote);
+	int nb_alternative, pos_corrigee;
+	int nb_correction = 0;
+
+	
+	
+	//For each column in the matrix, if the max vote is find and is uniq we can apply the correction
+	for (int i = 0; i < nb_column; i++) {
+		nb_alternative = 0;
+		for (int nt=0; nt < 4; nt++) {
+			vote = votes[i][nt];
+			if (vote == maxVote) {
+				nb_alternative += 1;
+				good_nt = nt;
+			}
+		}
+		if(nb_alternative == 1){
+			pos_corrigee = (start_pos+1) + i;
+			/*
+			printf("\t\t%i\t%i\t%c\t%c   with   (max_score: %i)  (mini: %i)   (nb_kmer_check: %i)\n",_seq_num,pos_corrigee  ,bin2NT[good_nt], readseq[pos_corrigee], maxVote, t, nb_kmer_check);
+			errfile->print("%i\t%i\t%c\t%c\n",_seq_num,pos_corrigee  ,bin2NT[good_nt], readseq[pos_corrigee]);
+			readseq[pos_corrigee] = bin2NT[good_nt];*/
+			nb_correction += apply_correction(readseq, pos_corrigee, good_nt);
+		}
+	}
+
+	if(PRINT_DEBUG){
+		if(nb_correction == 0){
+			__badReadStack += "\t\tfailed because of multiple alternative\n";
+		}
+	}
+	
+    return nb_correction;
+    
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
+	if(is_pos_corrected(pos)){
+		return 0;
+	}
+	char bin2NT[4] = {'A','C','T','G'};
+	
+	std::ostringstream oss;
+    oss << _seq_num;
+    std::string str__seq_num = oss.str();
+    std::ostringstream oss2;
+    oss2 << pos;
+    std::string str_pos = oss2.str();
+	if(PRINT_DEBUG){ __badReadStack += "\t\t" + str__seq_num + "\t" + str_pos + "\t" + bin2NT[good_nt] + "\t" + readseq[pos] + "\n"; }
+	//printf("\t\t%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
+	
+    _errfile->print("%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
+    readseq[pos] = bin2NT[good_nt]; //correc sequence in ram
+    // printf("error found pos %i  read %i\n",ii, _bloocoo._seq_num);
+    _corrected_pos.push_back(pos);
+    return 1;
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+kmer_type Bloocoo::codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction){
+	kmer_type temp_kmer;
+	char binrev[4] = {2,3,0,1};
+	
+	if(direction == RIGHT){
+		temp_kmer = model->codeSeedRight(*kmer, nt, Data::INTEGER, KMER_DIRECT);
+	}
+	else{
+		kmer_type kmer_end_rev = revcomp(*kmer, _kmerSize);
+		temp_kmer = model->codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER, KMER_DIRECT);
+		temp_kmer = revcomp(temp_kmer, _kmerSize);
+	}
+	return temp_kmer; //min(temp_kmer, revcomp(temp_kmer, _kmerSize));
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+kmer_type Bloocoo::codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction){
+	//Attention ici, penser à utiliser une fonction binToNT statique.
+	return codeSeedBin(model, kmer, (nt>>1)&3, direction);
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//// print_agressive_votes
+//Debug function for agressive correction, print the votes tab
+void Bloocoo::print_agressive_votes(int votes[4]){
+	char bin2NT[4] = {'A','C','T','G'};
+	printf("#############################################\n");
+	for(int i=0; i<4; i++){
+		printf("%c: %i\n", bin2NT[i], votes[i]);
+	}
+	printf("#############################################\n");
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//print_votes
+//Debug function for vote correction, print the votes matrix
+void Bloocoo::print_votes(int votes[][4], int nb_column){
+	char bin2NT[4] = {'A','C','T','G'};
+	printf("#############################################\n");
+	for(int nt=0; nt<4; nt++){
+		printf("%c  ", bin2NT[nt]);
+		for(int i=0; i<nb_column; i++){
+			printf("%i ", votes[i][nt]);
+		}
+		printf("\n");
+	}
+	printf("#############################################\n");
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+void Bloocoo::print_read_correction_state(KmerModel* model, Sequence& s, int seq_num){
+	KmerModel::Iterator itKmer2 (*model);
+	kmer_type kmer, kmer_min;
+	
+	itKmer2.setData (s.getData(),KMER_DIRECT);
+	int i3=0;
+	//printf("\nread correction state (%i):\n", seq_num);
+	//printf("\t%s\n", s.getDataBuffer());
+	//printf("\t");
+	
+	std::ostringstream oss;
+    oss << seq_num;
+
+
+	__badReadStack += "Read correction state (" + oss.str() += "):\n";
+	__badReadStack += "\t" + std::string(s.getDataBuffer());
+	__badReadStack += "\n\t";
+	
+	for (itKmer2.first(); !itKmer2.isDone(); itKmer2.next(),i3++){
+		kmer = *itKmer2;
+		kmer_min = std::min(  revcomp (kmer, _kmerSize),kmer );
+		if (_bloom->contains(kmer_min)){
+			//printf("1");
+			__badReadStack += "1";
+		}
+		else{
+			//printf("0");
+			__badReadStack += "0";
+		}
+	}
+	//printf("\n");
+	__badReadStack += "\n";
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+void Bloocoo::print_read_if_not_fully_corrected(KmerModel* model, Sequence& s){
+	std::string read_state = "";
+	std::string normal_state = "";
+	KmerModel::Iterator itKmer2 (*model);
+	kmer_type kmer, kmer_min;
+	
+	itKmer2.setData (s.getData(),KMER_DIRECT);
+	int i3=0;
+	//printf("\nread correction state (%i):\n", _seq_num);
+	//printf("\t%s\n", s.getDataBuffer());
+	//printf("\t");
+	for (itKmer2.first(); !itKmer2.isDone(); itKmer2.next(),i3++){
+		normal_state += "1";
+		kmer = *itKmer2;
+		kmer_min = std::min(  revcomp (kmer, _kmerSize),kmer );
+		if (_bloom->contains(kmer_min)){
+			read_state += "1";
+		}
+		else{
+			read_state += "0";
+		}
+	}
+	if(normal_state.compare(read_state) != 0){
+		//print_read_correction_state(_bloom, model, _kmerSize, s, _seq_num);
+		printf("%s", __badReadStack.c_str());
+	}
+	
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//// mutate_kmer
+// fonction to mutate kmer : takes kmer, pos (de la fin ,0-based), and nt (nt = 0,1,2ou 3) 
+// par exemple  kmer ,2 , C    avec kmer =  AAAAAAAAAA
+//
+// return : 
+// AAAAAAACAA
+void Bloocoo::mutate_kmer(kmer_type * kmer, int pos, char nt)
+{
+    kmer_type reset_mask =  ~((kmer_type)3 << (pos*2));
+    kmer_type set_mask =  ((kmer_type)nt) << (pos*2);
+    *kmer = (*kmer & reset_mask )  | set_mask;
+}
+
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+bool Bloocoo::is_pos_corrected(int pos){
+	return std::find(_corrected_pos.begin(), _corrected_pos.end(), pos) != _corrected_pos.end();
+}

@@ -23,20 +23,22 @@ class TestReadCorrection:
 		kmer_size = str(params["kmer_size"])
 		coverage_threshold = str(params["coverage_threshold"])
 		error_rate = str(params["error_rate"])
-		nb_iter = str(params["nb_iter"])
+		nb_iter = "0"
 		nb_kmer_checked = str(params["nb_kmer_checked"])
+		regenerate_reads = (params["regenerate_reads"] == "regen")
 		genome_filename = str(params["genome_filename"])
 		
 		
 		#Mutaread
-		if genome_filename == "":
-			#Generation d'un genome aleatoirement, le genome est contenu dans le fichier alea.seq
-			os.system("../../gener_alea " + genome_size + " 1")
-			#Decoupage du genome contenu dans le fichier en multiple reads
-			#Params: file_in, file_out, reads_count, reads_length, error_rate, error_rate, error_rate
-			os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
-		else:
-			os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
+		if regenerate_reads:
+			if genome_filename == "":
+				#Generation d'un genome aleatoirement, le genome est contenu dans le fichier alea.seq
+				os.system("../../gener_alea " + genome_size + " 1")
+				#Decoupage du genome contenu dans le fichier en multiple reads
+				#Params: file_in, file_out, reads_count, reads_length, error_rate, error_rate, error_rate
+				os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
+			else:
+				os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
 		
 		#Bloocoo correction
 		t = time.time()
@@ -60,7 +62,7 @@ class TestReadCorrection:
 		TestReadCorrection.remove_file("test_diff_result.temp")
 		#TestReadCorrection.remove_file("reads_bloocoo_corr_errs.tab")
 		#TestReadCorrection.remove_file("reads_errs.tab")
-		TestReadCorrection.remove_file("comm.temp")
+		#TestReadCorrection.remove_file("comm.temp")
 		TestReadCorrection.remove_file("tmp.binary")
 		TestReadCorrection.remove_file("tmp.solid")
 		#TestReadCorrection.remove_file("reads.fasta")
@@ -93,6 +95,13 @@ class TestReadCorrection:
 		command = "comm -12 " + "sorted_"+err_tab_filename + " " + "sorted_"+corrected_tab_filename + " > comm.temp"
 		os.system(command)
 		error_corrected_count = int(commands.getstatusoutput("wc -l comm.temp")[1].split(" ")[0])
+		
+		
+		#Cette command est seulement utilise pour debugguer pour connaitre les erreur non corrigee !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		command = "diff " + "sorted_"+err_tab_filename + " " + "sorted_"+corrected_tab_filename + " > comm.temp"
+		os.system(command)
+		
+		
 		#t = time.time()
 		#command = "comm -13 " + "sorted_"+err_tab_filename + " " + "sorted_"+corrected_tab_filename + " > comm.temp"
 		#os.system(command)
@@ -121,14 +130,14 @@ class TestReadCorrection:
 		if total_error_count == 0:
 			recall = 100
 		else:
-			recall = round((float(vp)/vrai)*100,1)
+			recall = '%.2f' % ((float(vp)/vrai)*100)
 		print "-\tRecall (Taux Erreur corrigee): " + str(recall) + "%"
 		print "-\tPredit: " + str(predit)
 		print "-\tFP (Erreur ajoutees):", fp
 		if predit == 0:
 			precision = 100
 		else:
-			precision = round((float(vp)/predit)*100,1)
+			precision = '%.2f' % ((float(vp)/predit)*100)
 		
 		print "-\tPrecision: " + str(precision) + "%"
 		print "----------------------------------------"

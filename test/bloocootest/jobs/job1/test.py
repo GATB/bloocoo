@@ -14,8 +14,8 @@ p = {
 	"error_rate": 0.01,
 	"result_filename_prefix": "bloocoo_test",
 	"R_script_filename": "rec_pre_vs_err.R",
-	"nb_iter": 2,
-	"nb_kmer_checked": 4,
+	"nb_kmer_checked": 2,
+	"regenerate_reads": True,
 }
 
 

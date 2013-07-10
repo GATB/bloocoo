@@ -8,9 +8,14 @@ from math import ceil
 
 #fonction permettant d'executer un test avec les variables parametrables comme arguments
 def execute_test(p):
+	if p["regenerate_reads"]:
+		regen = "regen"
+	else:
+		regen = "no_regen"
+	
 	os.system("python ../../main.py " + p["result_filename_prefix"] + " " + str(p["genome_size"]) + " " + str(p["reads_size"]) +\
 	" " + str(p["reads_count"]) + " " + str(p["kmer_size"]) + " " + str(p["coverage_threshold"]) + " " +\
-	str(p["error_rate"]) + " " + str(p["nb_iter"]) + " " + str(p["nb_kmer_checked"]) + " " + p["genome_filename"]) 
+	str(p["error_rate"]) + " " + str(p["nb_kmer_checked"]) + " " + regen + " " + p["genome_filename"]) 
 
 
 #fonction permettant de creer un graphe en prennant comme donnee
