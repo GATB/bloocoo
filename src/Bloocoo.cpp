@@ -923,6 +923,8 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
 	}
 	char bin2NT[4] = {'A','C','T','G'};
 	
+     if(readseq[pos] =='N') return 0; // dont correct N ?
+    
 	std::ostringstream oss;
     oss << _seq_num;
     std::string str__seq_num = oss.str();
