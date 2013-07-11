@@ -61,6 +61,7 @@ public:
 	std::vector<int> _corrected_pos;
 	
 	std::string __badReadStack; //Variable de debug qui contient l'empreinte de la correction des reads
+	int __correction_methods_successes[3]; //Variable de statistique qui enregistre le nombre de fois que les methode de correction (0, 1 et 2) ont reussi une correction
 	
 	
 public:
@@ -77,8 +78,8 @@ public:
 
 	void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction);
 	int apply_correction(char *readseq, int pos, int good_nt);
-	int twoSidedCorrection(int pos, char *readseq, kmer_type kmer_begin,kmer_type kmer_end);
-	int aggressiveCorrection(int pos, char *readseq, kmer_type kmer_begin,int nb_kmer_check, Direction direction);
+	int twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[]);
+	int aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction);
 	int voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked);
 	int voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check);
 
