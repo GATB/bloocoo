@@ -189,9 +189,7 @@ public:
 		                    if(((untrusted_zone_size-1) == sizeKmer)  &&  (ii > sizeKmer)){
 		                        
 		                        _bloocoo.__badReadStack += "\t\tTwo sided (hole size k)\n";
-
 		                        nb_errors_cor = _bloocoo.twoSidedCorrection(ii-2, readseq, kmers);
-		                        //update_nb_errors_corrected(nb_errors_cor, &_local_nb_errors_corrected, &continue_correction);
 
 		                    }
                         
@@ -204,7 +202,7 @@ public:
 		                        if(!first_gap)
 		                        {
 		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 1 right)\n"; }
-		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii- untrusted_zone_size -1 , readseq,  kmers, nb_checked , Bloocoo::RIGHT);
+		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii- untrusted_zone_size -1, readseq,  kmers, nb_checked , Bloocoo::RIGHT);
 		                        }
 		                        
 		                        
@@ -638,7 +636,6 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 		}
 			
 		current_kmer = codeSeedBin(&model, &kmer_begin, nt, direction);
-        
         current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
         
         if(_bloom->contains(current_kmer_min)) //kmer is indexed
