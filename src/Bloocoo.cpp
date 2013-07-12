@@ -185,7 +185,7 @@ public:
                         	
 		                    //two-sided conservative correction
 		                    // this should be an isolated error, middle of the read
-		                    // if error at pos sizeKmer, could work in theory but would need kmer_begin+1
+		                    // if error at pos sizeKmercorrected_pos+1+ii, could work in theory but would need kmer_begin+1
 		                    if(((untrusted_zone_size-1) == sizeKmer)  &&  (ii > sizeKmer)){
 		                        
 		                        _bloocoo.__badReadStack += "\t\tTwo sided (hole size k)\n";
@@ -195,20 +195,21 @@ public:
                         
                         	if(nb_errors_cor == 0){
                         	
-		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size);
-		                        nb_checked = max(nb_checked, 1);
+		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-2);
+		                        nb_checked = max(nb_checked, 0);
 		                        
 		                        //if first gap, cannot correct from the left side of the gap
-		                        if(!first_gap)
+		                        //2eme condition: Agressive right peut corriger le debut si le trou est plus long que sizeKmer mais est-ce utile?
+		                        if(!first_gap || (first_gap && untrusted_zone_size > sizeKmer))
 		                        {
 		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 1 right)\n"; }
-		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii- untrusted_zone_size -1, readseq,  kmers, nb_checked , Bloocoo::RIGHT);
+		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii-untrusted_zone_size, readseq,  kmers, nb_checked , Bloocoo::RIGHT);
 		                        }
 		                        
 		                        
 		                        if(nb_errors_cor == 0){
 		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 2 left)\n"; }
-		                        	nb_errors_cor = _bloocoo.aggressiveCorrection(ii-1 , readseq,  kmers, nb_checked , Bloocoo::LEFT);
+		                        	nb_errors_cor = _bloocoo.aggressiveCorrection(ii-2 , readseq,  kmers, nb_checked , Bloocoo::LEFT);
 		                        }
 		                        
 				                if(nb_errors_cor == 0){
@@ -222,13 +223,9 @@ public:
                         
                     }
                     
-                    
-                    
-                    
                     if(trusted_zone_size==2){
                     	first_gap = false;
                     }
-                    
                     
                     ////////////traitement d'un faux positif du bloom isolé
                     //   if(trusted_zone_size==1) tai_previous_break = untrusted_zone_size; // begin of indexed zone    ( if untrusted_zone_size ?)
@@ -256,10 +253,11 @@ public:
                     
                     //end of the read, we should treat this gap here correc snp with trad method
                     if(ii == (readlen-sizeKmer)){
-                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size);
+                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-1);
+                        nb_checked = max(nb_checked, 0);
                         
                         if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (end)\n"; }
-                        nb_errors_cor = _bloocoo.aggressiveCorrection(readlen - untrusted_zone_size - sizeKmer , readseq,  kmers, nb_checked , Bloocoo::RIGHT);
+                        nb_errors_cor = _bloocoo.aggressiveCorrection(readlen - untrusted_zone_size - sizeKmer + 1, readseq,  kmers, nb_checked , Bloocoo::RIGHT);
                             
                         if(nb_errors_cor == 0){
                         	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tVote correction (end)\n"; }
@@ -591,10 +589,10 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
     int corrected_pos;
     
     if(direction ==RIGHT){
-        corrected_pos = pos+_kmerSize;
+        corrected_pos = pos+_kmerSize-1;
     }
     else{
-        corrected_pos = pos-1;
+        corrected_pos = pos;
     }
         
 	if(!is_pos_correctable(corrected_pos, readseq)){
@@ -617,16 +615,14 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
     //revASCII['G']= 'C';
     
     KmerModel model (_kmerSize);
-    
     kmer_type current_kmer, current_kmer_min;
-    
     
     int original_nt;
     if(direction ==RIGHT){
-        original_nt = (readseq[pos+_kmerSize]>>1)&3;
+        original_nt = (readseq[corrected_pos]>>1)&3;
     }
     else{
-    	original_nt = (readseq[pos-1]>>1)&3;
+    	original_nt = (readseq[corrected_pos]>>1)&3;
     }
         
     for(int nt=0; nt<4; nt++)
@@ -635,7 +631,16 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 			continue;
 		}
 			
-		current_kmer = codeSeedBin(&model, &kmer_begin, nt, direction);
+		current_kmer = kmer_begin;
+		
+		if(direction ==RIGHT){
+			mutate_kmer(&current_kmer, 0, nt);
+		}
+		else{
+		    mutate_kmer(&current_kmer, _kmerSize-1, nt);
+		}
+		
+		//current_kmer = codeSeedBin(&model, &kmer_begin, nt, direction);
         current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
         
         if(_bloom->contains(current_kmer_min)) //kmer is indexed
@@ -646,18 +651,19 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
         	continue;
         }
 
-
-		for (int ii=0; ii<nb_kmer_check; ii++)
+		//nb_kmer_check-1: -1 because the first mutation above is counted as a kmer check
+		for (int ii=0; ii<nb_kmer_check-1; ii++)
 		{
 		    
 		    if(direction == RIGHT){
-		        nt_temp = readseq[pos+_kmerSize+1+ii];
+		        nt_temp = readseq[corrected_pos+1+ii];
 		    }
 		    else{
-		        nt_temp = readseq[pos-2-ii];
+		        nt_temp = readseq[corrected_pos-1-ii];
 		    }
 		    
 		    current_kmer = codeSeedNT(&model, &current_kmer, nt_temp, direction);
+		    
 		    current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
 		    if(_bloom->contains(current_kmer_min)) //kmer is indexed
 		    {
@@ -678,7 +684,8 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 	}
 
 	//int t = (nb_kmer_check*25)/100;
-	int t = max(1, t);
+	//int t = max(1, nb_kmer_check);
+	int t = 1; //max(1, nb_kmer_check);
 	if(max_score < t){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (max score %i is too low)\n", max_score; }
 		return 0;
@@ -716,7 +723,14 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 
 
 
-
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
 int Bloocoo::voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked){
 	//printf("%i:    %i %i\n", _seq_num, start_pos, end_pos);
 	//printf("\n\t");
@@ -765,16 +779,13 @@ int Bloocoo::voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *rea
 int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check)
 {
 	
-	
-    //printf("Start voting correction\n");
-
     int good_nt;
     char bin2NT[4] = {'A','C','T','G'};
-    KmerModel model (_kmerSize);
-    kmer_type kmer_begin = *kmers[start_pos];
+    //KmerModel model (_kmerSize);
+    //kmer_type kmer_begin = *kmers[start_pos];
     kmer_type current_kmer, current_kmer_min, mutated_kmer;
 
-	int nb_column = nb_kmer_check + _kmerSize;
+	int nb_column = nb_kmer_check + _kmerSize - 1;
 	int votes[nb_column][4];
 	for (int i = 0; i < nb_column; i++) {
 		for (int nt=0; nt < 4; nt++) {
@@ -783,16 +794,17 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 	}
 	
 	//kmer_begin.printASCII(_kmerSize);
-	current_kmer = kmer_begin;
-
+	//current_kmer = kmer_begin;
+	
 	for(int i=0; i < nb_kmer_check; i++){
 
-		// (pos+1) is the first untrusted base
-		int read_pos = (start_pos+1) + i;
-		//current_kmer.printASCII(_kmerSize);
-		//current_kmer = codeSeedNT(&model, &current_kmer, readseq[read_pos+(_kmerSize-1)], RIGHT);
-		current_kmer = model.codeSeedRight(current_kmer, readseq[read_pos+(_kmerSize-1)], Data::ASCII, KMER_DIRECT);
-		//current_kmer.printASCII(_kmerSize);
+		int read_pos = start_pos + i;
+		
+		current_kmer = *kmers[read_pos];
+		//current_kmer = model.codeSeedRight(current_kmer, readseq[read_pos+(_kmerSize-1)], Data::ASCII, KMER_DIRECT);
+		
+		//printf("\tcurrent kmer:    "); current_kmer.printASCII(_kmerSize);
+		
 		current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
 		if(_bloom->contains(current_kmer_min)){
 		    continue;
@@ -802,13 +814,13 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 		}
 				
 		for(int kpos=0; kpos < _kmerSize; kpos++){
-			int original_nt = (readseq[read_pos+kpos]>>1)&3; //NT2bin ModelAbstract
-			//printf("original_nt: %i\n", original_nt);
+			int original_nt = (readseq[read_pos+kpos]>>1)&3;
+			
     		for(int nt=0; nt<4; nt++){
 				if(nt == original_nt){
 					continue;
 				}
-				//printf("\t%i\n", nt);
+				
 				mutated_kmer = current_kmer;
 				mutate_kmer(&mutated_kmer, _kmerSize-1-kpos, nt);
 				//mutated_kmer.printASCII(_kmerSize);
@@ -870,7 +882,7 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 			}
 		}
 		if(nb_alternative == 1){
-			corrected_pos = (start_pos+1) + i;
+			corrected_pos = start_pos + i;
 			int nb_cor = apply_correction(readseq, corrected_pos, good_nt);
 			nb_correction += nb_cor;
 	    	if(PRINT_STATS){ __correction_methods_successes[2] += nb_cor; }
