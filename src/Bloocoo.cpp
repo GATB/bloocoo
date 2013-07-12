@@ -503,7 +503,7 @@ void Bloocoo::update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _lo
 //pos is the position of the error
 int Bloocoo::twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[])
 {
-	if(is_pos_corrected(pos)){
+	if(!is_pos_correctable(pos, readseq)){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (position is already corrected)\n"; }
 		return 0;
 	}
@@ -597,7 +597,7 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
         corrected_pos = pos-1;
     }
         
-	if(is_pos_corrected(corrected_pos)){
+	if(!is_pos_correctable(corrected_pos, readseq)){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (position is already corrected)\n"; }
 		return 0;
 	}
@@ -797,7 +797,7 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 		if(_bloom->contains(current_kmer_min)){
 		    continue;
 		}
-		if(is_pos_corrected(read_pos)){
+		if(!is_pos_correctable(read_pos, readseq)){
 			continue;
 		}
 				
@@ -896,12 +896,12 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 ** REMARKS :
 *********************************************************************/
 int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
-	if(is_pos_corrected(pos)){
+	if(!is_pos_correctable(pos, readseq)){
 		return 0;
 	}
 	char bin2NT[4] = {'A','C','T','G'};
 	
-    if(readseq[pos] =='N') return 0; // dont correct N ?
+    
 
 	if(PRINT_DEBUG){
 		std::ostringstream oss;
@@ -1107,6 +1107,10 @@ void Bloocoo::mutate_kmer(kmer_type * kmer, int pos, char nt)
 ** RETURN  :
 ** REMARKS :
 *********************************************************************/
-bool Bloocoo::is_pos_corrected(int pos){
-	return std::find(_corrected_pos.begin(), _corrected_pos.end(), pos) != _corrected_pos.end();
+bool Bloocoo::is_pos_correctable(int pos, char* readseq){
+	bool N_at_pos = (readseq[pos] == 'N');
+	bool is_pos_corrected = (std::find(_corrected_pos.begin(), _corrected_pos.end(), pos) != _corrected_pos.end());
+	return !N_at_pos && !is_pos_corrected;
 }
+
+
