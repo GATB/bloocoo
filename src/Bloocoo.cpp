@@ -188,7 +188,7 @@ public:
 		                    // if error at pos sizeKmercorrected_pos+1+ii, could work in theory but would need kmer_begin+1
 		                    if(((untrusted_zone_size-1) == sizeKmer)  &&  (ii > sizeKmer)){
 		                        
-		                        _bloocoo.__badReadStack += "\t\tTwo sided (hole size k)\n";
+                                if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tTwo sided (hole size k)\n";}
 		                        nb_errors_cor = _bloocoo.twoSidedCorrection(ii-2, readseq, kmers);
 
 		                    }
