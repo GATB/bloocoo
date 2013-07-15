@@ -66,10 +66,15 @@ using namespace gatb::core::tools::math;
 /********************************************************************************/
 // We define some string constants.
 /********************************************************************************/
-const char* Bloocoo::STR_NB_ITER_PER_READ          = "-nb-iter";
+const char* Bloocoo::STR_NB_MIN_VALID         = "-nbmin-valid";
 const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 
 
+// these 2 tabs are now known globally
+//char bin2NT[4] = {'A','C','T','G'};
+//char binrev[4]    = {2,3,0,1};
+
+//char bin2NTrev[4] = {'T','G','A','C'};
 
 
 
@@ -111,9 +116,7 @@ public:
         
         if(PRINT_DEBUG){ _bloocoo.__badReadStack = "\n\n\n"; }
         
-        //char bin2NT[4] = {'A','C','T','G'};
-        //char bin2NTrev[4] = {'T','G','A','C'};
-        //char binrev[4]    = {2,3,0,1};
+
         
         //printf("---- new read ----\n");
         
@@ -152,10 +155,8 @@ public:
             //avec un indice > ii
             kmer_type* kmers[readlen-sizeKmer+1]; 
             										
-            
-            
-            
-			if(PRINT_DEBUG){ _bloocoo.print_read_correction_state(&model, s, _bloocoo._seq_num); }
+                        
+			if(PRINT_DEBUG){ _bloocoo.print_read_correction_state(&model, s); }
 		      
             // We iterate the kmers of this sequence
             for (itKmer.first(); !itKmer.isDone(); itKmer.next(),ii++)
@@ -174,12 +175,13 @@ public:
                 
                 if (!is_last_kmer_indexed_after_hole && _bloom.contains(current_kmer_min)) //kmer is solid
                 {
+                    
                     trusted_zone_size += 1;
                     
 					//beginning of indexed zone
                     if(trusted_zone_size == 2) 
                     {
-                        
+                       
                         if (untrusted_zone_size>1){
                         
                         	
@@ -195,7 +197,7 @@ public:
                         
                         	if(nb_errors_cor == 0){
                         	
-		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-2);
+		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-2); // en fait plus utilisé en interne  dapres gaetan ..
 		                        nb_checked = max(nb_checked, 0);
 		                        
 		                        //if first gap, cannot correct from the left side of the gap
@@ -247,7 +249,7 @@ public:
                 }
                 else //kmer contains an error
                 {
-                
+
                     untrusted_zone_size += 1;
                     trusted_zone_size = 0;
                     
@@ -345,7 +347,7 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
     getParser()->add (new OptionOneParam (DSK::STR_KMER_SIZE,               "size of a kmer",   true));
     getParser()->add (new OptionOneParam (DSK::STR_URI_DATABASE,            "database",         true));   // not useful ?
     getParser()->add (new OptionOneParam (DSK::STR_URI_SOLID_KMERS,         "solid kmers file", false));
-    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_ITER_PER_READ,    "number of iterations per read", false,"3"));
+    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,    "min number of kmers to valid a correction", false,"2"));
     getParser()->add (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"2"));
 }
 
@@ -365,7 +367,7 @@ void Bloocoo::execute ()
     _kmerSize           = getInput()->getInt (DSK::STR_KMER_SIZE);
     _solidFile          = getInput()->getStr (DSK::STR_URI_SOLID_KMERS);
     _nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
-    _nb_passes_per_read = getInput()->getInt (STR_NB_ITER_PER_READ);
+    _nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
     
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
@@ -605,8 +607,6 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
     int good_nt;
 	char nt_temp;
     
-    char bin2NT[4] = {'A','C','T','G'};
-    //char binrev[4]    = {2,3,0,1};
     
     //char revASCII [256];
     //revASCII['A']= 'T';
@@ -684,8 +684,8 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 	}
 
 	//int t = (nb_kmer_check*25)/100;
-	//int t = max(1, nb_kmer_check);
-	int t = 1; //max(1, nb_kmer_check);
+	int t = max(1, nb_kmer_check);
+	//int t = 1; //max(1, nb_kmer_check);
 	if(max_score < t){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (max score %i is too low)\n", max_score; }
 		return 0;
@@ -780,7 +780,6 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 {
 	
     int good_nt;
-    char bin2NT[4] = {'A','C','T','G'};
     //KmerModel model (_kmerSize);
     //kmer_type kmer_begin = *kmers[start_pos];
     kmer_type current_kmer, current_kmer_min, mutated_kmer;
@@ -911,9 +910,9 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
 	if(!is_pos_correctable(pos, readseq)){
 		return 0;
 	}
-	char bin2NT[4] = {'A','C','T','G'};
 	
-    
+    // char bin2NT[4] = {'A','C','T','G'};
+
 
 	if(PRINT_DEBUG){
 		std::ostringstream oss;
@@ -943,7 +942,6 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
 *********************************************************************/
 kmer_type Bloocoo::codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction){
 	kmer_type temp_kmer;
-	char binrev[4] = {2,3,0,1};
 	
 	if(direction == RIGHT){
 		temp_kmer = model->codeSeedRight(*kmer, nt, Data::INTEGER, KMER_DIRECT);
@@ -980,7 +978,6 @@ kmer_type Bloocoo::codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direct
 //// print_agressive_votes
 //Debug function for agressive correction, print the votes tab
 void Bloocoo::print_agressive_votes(int votes[4]){
-	char bin2NT[4] = {'A','C','T','G'};
 	printf("#############################################\n");
 	for(int i=0; i<4; i++){
 		printf("%c: %i\n", bin2NT[i], votes[i]);
@@ -999,7 +996,6 @@ void Bloocoo::print_agressive_votes(int votes[4]){
 //print_votes
 //Debug function for vote correction, print the votes matrix
 void Bloocoo::print_votes(int votes[][4], int nb_column){
-	char bin2NT[4] = {'A','C','T','G'};
 	printf("#############################################\n");
 	for(int nt=0; nt<4; nt++){
 		printf("%c  ", bin2NT[nt]);
@@ -1019,7 +1015,7 @@ void Bloocoo::print_votes(int votes[][4], int nb_column){
 ** RETURN  :
 ** REMARKS :
 *********************************************************************/
-void Bloocoo::print_read_correction_state(KmerModel* model, Sequence& s, int seq_num){
+void Bloocoo::print_read_correction_state(KmerModel* model, Sequence& s){
 	KmerModel::Iterator itKmer2 (*model);
 	kmer_type kmer, kmer_min;
 	
@@ -1030,7 +1026,7 @@ void Bloocoo::print_read_correction_state(KmerModel* model, Sequence& s, int seq
 	//printf("\t");
 	
 	std::ostringstream oss;
-    oss << seq_num;
+    oss << s.getIndex();
 
 
 	__badReadStack += "Read correction state (" + oss.str() += "):\n";

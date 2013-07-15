@@ -50,11 +50,11 @@ public:
     uint64_t        _seq_num;
     int            _nb_kmers_checked;
     
-    int            _nb_passes_per_read;
+    int            _nb_min_valid;
     
     IBank* _inputBank;
 
-    static const char* STR_NB_ITER_PER_READ;
+    static const char* STR_NB_MIN_VALID;
     static const char* STR_NB_VALIDATED_KMERS;
     
     IFile*      _errfile;
@@ -87,7 +87,7 @@ public:
 	
 	void print_agressive_votes(int votes[4]);
 	void print_votes(int votes[][4], int nb_column);
-	void print_read_correction_state(KmerModel* model, Sequence& s, int seq_num);
+	void print_read_correction_state(KmerModel* model, Sequence& s);
 	void print_read_if_not_fully_corrected(KmerModel* model, Sequence& s);
 	void mutate_kmer(kmer_type * kmer, int pos, char nt);
 	bool is_pos_correctable(int pos, char* readseq);
