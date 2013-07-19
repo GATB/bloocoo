@@ -23,6 +23,7 @@
 #include <gatb/tools/collections/impl/Bloom.hpp>
 
 #include <string>
+#include <sstream>
 
 /********************************************************************************/
 
@@ -45,6 +46,8 @@ class Bloocoo : public misc::impl::Tool
 //private:
 public:
 
+	bool __found;
+	
     size_t          _kmerSize;
     std::string     _solidFile;
     uint64_t        _seq_num;
@@ -62,6 +65,10 @@ public:
 	
 	std::string __badReadStack; //Variable de debug qui contient l'empreinte de la correction des reads
 	int __correction_methods_successes[3]; //Variable de debug pour afficher l'efficacité des méthodes de correction
+	
+	int _max_multimutation_distance;
+	std::ostringstream _oss; //Use to convert int to string many time per frame
+	std::istringstream _iss; //Use to convert string to int many time per frame
 	
 public:
 
@@ -82,6 +89,10 @@ public:
 	int voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked);
 	int voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check);
 
+	int multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, int max_nb_mutation);
+	int multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int max_nb_mutation);
+	int multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int max_nb_mutation, int current_nb_mutation, std::string mutations, std::map<std::string, int>& votes);
+	
 	kmer_type codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction);
 	kmer_type codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction);
 	
