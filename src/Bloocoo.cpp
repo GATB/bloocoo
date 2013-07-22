@@ -106,13 +106,10 @@ class CorrectReads : public IteratorFunctor
 public:
     void operator() ( Sequence& s) //no const otherwise error with tKmer.setData
     {
-        //if(s.getIndex() != 1436){
+        //if(s.getIndex() != 681){
         //	return;
         //}
         
-        //if(s.getIndex() != 4925){
-        //	return;
-        //}
         // _bloom   is the bloom filter containing the solid kmers
         // _bloom.contains(kmer)  to ask if it contains a kmer
         
@@ -209,13 +206,13 @@ public:
 		                        if(!first_gap || (first_gap && untrusted_zone_size > sizeKmer))
 		                        {
 		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 1 right)\n"; }
-		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii-untrusted_zone_size, readseq,  kmers, nb_checked , Bloocoo::RIGHT);
+		                            nb_errors_cor = _bloocoo.aggressiveCorrection(ii-untrusted_zone_size, readseq,  kmers, nb_checked, readlen, Bloocoo::RIGHT);
 		                        }
 		                        
 		                        
 		                        if(nb_errors_cor == 0){
 		                        	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (big hole 2 left)\n"; }
-		                        	nb_errors_cor = _bloocoo.aggressiveCorrection(ii-2 , readseq,  kmers, nb_checked , Bloocoo::LEFT);
+		                        	nb_errors_cor = _bloocoo.aggressiveCorrection(ii-2 , readseq,  kmers, nb_checked, readlen, Bloocoo::LEFT);
 		                        }
 		                        
 				                if(nb_errors_cor == 0){
@@ -268,7 +265,7 @@ public:
                         nb_checked = max(nb_checked, 0);
                         
                         if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (end)\n"; }
-                        nb_errors_cor = _bloocoo.aggressiveCorrection(readlen - untrusted_zone_size - sizeKmer + 1, readseq,  kmers, nb_checked , Bloocoo::RIGHT);
+                        nb_errors_cor = _bloocoo.aggressiveCorrection(readlen - untrusted_zone_size - sizeKmer + 1, readseq,  kmers, nb_checked, readlen ,Bloocoo::RIGHT);
                             
                         if(nb_errors_cor == 0){
                         	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tVote correction (end)\n"; }
@@ -596,7 +593,7 @@ int Bloocoo::twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[])
 // Direction:
 //     RIGHT: We start from the last trusted kmer BEFORE the untrusted zone and try to correct the first error in this zone.
 //     LEFT:  We start from the first trusted kmer AFTER the untrusted zone and try to correct the last error in this zone.
-int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction)
+int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int readlen, Direction direction)
 {
 	
 	//Determine corrected position depending of a left or right agressive correction
@@ -614,10 +611,26 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 		return 0;
 	}
 	
+	
+    if(corrected_pos==0){
+    	if(PRINT_DEBUG){__badReadStack += "\t\tErr pos 0 => Read Side correction\n"; }
+    	//printf("start read side correction (err_pos: %i)\n", corrected_pos);
+    	//printf("seq_num: %i\n", _seq_num);
+    	int nb_cor = readSideCorrection(pos, readseq, kmers, 2, LEFT);
+    	return nb_cor;
+    }
+    else if(corrected_pos==readlen-1){
+    	if(PRINT_DEBUG){__badReadStack += "\t\tErr pos 99 => Read Side correction\n"; }
+    	//printf("start read side correction (err_pos: %i)\n", corrected_pos);
+    	//printf("seq_num: %i\n", _seq_num);
+    	int nb_cor = readSideCorrection(pos, readseq, kmers, 2, RIGHT);
+    	return nb_cor;
+    }
+    
     //Determine the minimum vote treshold
     //It's always the param _nb_min_valid except for the read sides (Sides have limited number of kmers to check)
     int vote_threshold;
-    if(corrected_pos < 3 || corrected_pos > 96){
+    if(corrected_pos < 3 || corrected_pos > readlen-4){
     	vote_threshold = 1;
     }
     else{
@@ -737,6 +750,7 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
     	if(PRINT_STATS){ __correction_methods_successes[AGRESSIVE] += nb_correction; }
         return nb_correction;
 	}
+
     
     if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (multiple alternative)\n"; }
     
@@ -1396,6 +1410,165 @@ int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_t
 
 
 
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+//// readSideCorrection
+//
+// nb_kmer_check the number of additional kmers checked
+// pos = position of the solid kmer next to the untrusted zone
+// kmer_begin  = solid kmer at pos
+// Direction:
+//     RIGHT: We start from the last trusted kmer BEFORE the untrusted zone and try to correct the first error in this zone.
+//     LEFT:  We start from the first trusted kmer AFTER the untrusted zone and try to correct the last error in this zone.
+int Bloocoo::readSideCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction)
+{
+	
+	//Determine corrected position depending of a left or right agressive correction
+    int corrected_pos;
+    if(direction ==RIGHT){
+        corrected_pos = pos+_kmerSize-1;
+    }
+    else{
+        corrected_pos = pos;
+    }
+    
+    //Cancelled the vote if the corrected position is not correctable
+	if(!is_pos_correctable(corrected_pos, readseq)){
+		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (position is already corrected)\n"; }
+		return 0;
+	}
+	
+    //Determine the minimum vote threshold
+    //It's always the param _nb_min_valid except for the read sides (Sides have limited number of kmers to check)
+    int vote_threshold = nb_kmer_check;
+    
+    /*
+    //If the number of checkable kmers is inferior to the vote threshold then the vote is cancelled
+	if(nb_kmer_check < vote_threshold){
+		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (nb_kmer_checked < nb_min_valid)\n";}
+		return 0;
+	}*/
+	
+	
+	kmer_type kmer_begin = *kmers[pos];
+	
+	//printf("\tkmer_begin: "); kmer_begin.printASCII(_kmerSize);
+	int votes [4] = {0, 0, 0, 0};
+    int good_nt;
+	char nt_temp;
+    
+    KmerModel model (_kmerSize);
+    kmer_type current_kmer, current_kmer_min;
+    
+    int original_nt;
+    if(direction ==RIGHT){
+        original_nt = (readseq[corrected_pos]>>1)&3;
+    }
+    else{
+    	original_nt = (readseq[corrected_pos]>>1)&3;
+    }
+        
+    for(int nt=0; nt<4; nt++)
+    {
+		if(nt == original_nt){
+			continue;
+		}
+			
+		current_kmer = kmer_begin;
+		
+		if(direction ==RIGHT){
+			mutate_kmer(&current_kmer, 0, nt);
+		}
+		else{
+		    mutate_kmer(&current_kmer, _kmerSize-1, nt);
+		}
+		
+		//current_kmer = codeSeedBin(&model, &kmer_begin, nt, direction);
+        current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
+        
+        if(_bloom->contains(current_kmer_min)) //kmer is indexed
+        {
+			votes[nt] += 1;
+        }
+        else{
+        	//continue;
+        }
 
+		//printf("\t\tmutated_kmer: "); current_kmer.printASCII(_kmerSize);
+		//kmer_type current_kmer2 = current_kmer;
+		//nb_kmer_check-1: -1 because the first mutation above is counted as a kmer check
+		for (int ii=0; ii<nb_kmer_check-1; ii++)
+		{
+			
+			for(int nt2=0; nt2<4; nt2++){
+				
+				kmer_type current_kmer2 = current_kmer;
+				codeSeedBin(&model, &current_kmer2, nt2, direction);
+				//printf("\t\t\tmutated_kmer: "); current_kmer2.printASCII(_kmerSize);
+				
+				current_kmer_min = min(current_kmer2, revcomp(current_kmer2, _kmerSize));
+				if(_bloom->contains(current_kmer_min)) //kmer is indexed
+				{
+				    votes[nt] += 1;
+				}
+			}
+		    
+		}
+    }
+
+    //print_agressive_votes(votes);
+
+	//Searching max score in votes
+	int max_score = votes[0];
+	for(int i=1; i<4; i++){
+ 		if(votes[i] > max_score){
+			max_score = votes[i];
+		}
+	}
+
+	//int t = (nb_kmer_check*25)/100;
+	//int t = max(1, nb_kmer_check);
+	//int t = 1; //max(1, nb_kmer_check);
+	
+	if(max_score < vote_threshold){
+		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (max score %i is too low)\n", max_score; }
+		return 0;
+	}
+	
+	//printf("max: %i\n", max_score);
+
+	//We have the max score in votes, now we have to check if this score
+	//is uniq or if more than one nt has the max score
+	int nb_alternative = 0;
+
+	for(int i=0; i<4; i++){
+ 		if(votes[i] == max_score){
+			nb_alternative += 1;
+			good_nt = i;
+		}
+	}
+
+	//printf("good_nt: %i, nb_alternative: %i\n", good_nt, nb_alternative);
+
+	//if max score is uniq we can correct the sequence
+	//else if nb_nt_max > 1 then there are more than one candidate for the correction
+	//so we cannot determine a good correction, the correction is cancelled.
+	if(nb_alternative == 1){
+		int nb_correction = apply_correction(readseq, corrected_pos, good_nt);
+    	if(PRINT_STATS){ __correction_methods_successes[READ_SIDE] += nb_correction; }
+        return nb_correction;
+	}
+    
+    if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (multiple alternative)\n"; }
+    
+    return 0;
+    
+}
 
 

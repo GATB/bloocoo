@@ -57,7 +57,7 @@ public:
 		AGRESSIVE,
 		VOTE,
 		MULTI_MUTATE_VOTE,
-		SIDE_VOTE,
+		READ_SIDE,
 		NB_CORRECTION_METHODS,
 	};
 	
@@ -95,7 +95,7 @@ public:
 	void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction);
 	int apply_correction(char *readseq, int pos, int good_nt);
 	int twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[]);
-	int aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction);
+	int aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int readlen, Direction direction);
 	int voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked);
 	int voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check);
 
@@ -103,7 +103,7 @@ public:
 	int multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int max_nb_mutation);
 	int multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int max_nb_mutation, int current_nb_mutation, std::string mutations, std::map<std::string, int>& votes);
 	
-	//int sideVoteCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction);
+	int readSideCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction);
 	
 	void codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction);
 	void codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction);
