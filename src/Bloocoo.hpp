@@ -46,7 +46,21 @@ class Bloocoo : public misc::impl::Tool
 //private:
 public:
 
-	bool __found;
+	enum Direction //typedef enum direction
+	{
+		LEFT,
+		RIGHT
+	};// direction_t;
+
+	enum CorrectionMethod{
+		TWO_SIDED,
+		AGRESSIVE,
+		VOTE,
+		MULTI_MUTATE_VOTE,
+		SIDE_VOTE,
+		NB_CORRECTION_METHODS,
+	};
+	
 	
     size_t          _kmerSize;
     std::string     _solidFile;
@@ -64,7 +78,7 @@ public:
 	std::vector<int> _corrected_pos;
 	
 	std::string __badReadStack; //Variable de debug qui contient l'empreinte de la correction des reads
-	int __correction_methods_successes[3]; //Variable de debug pour afficher l'efficacité des méthodes de correction
+	int __correction_methods_successes[NB_CORRECTION_METHODS]; //Variable de debug pour afficher l'efficacité des méthodes de correction
 	
 	int _max_multimutation_distance;
 	std::ostringstream _oss; //Use to convert int to string many time per frame
@@ -76,12 +90,8 @@ public:
     Bloocoo ();
 
 	
-	enum Direction //typedef enum direction
-	{
-		LEFT,
-		RIGHT
-	};// direction_t;
 
+	
 	void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction);
 	int apply_correction(char *readseq, int pos, int good_nt);
 	int twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[]);
@@ -93,8 +103,10 @@ public:
 	int multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int max_nb_mutation);
 	int multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int max_nb_mutation, int current_nb_mutation, std::string mutations, std::map<std::string, int>& votes);
 	
-	kmer_type codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction);
-	kmer_type codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction);
+	//int sideVoteCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction);
+	
+	void codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction);
+	void codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction);
 	
 	void print_agressive_votes(int votes[4]);
 	void print_votes(int votes[][4], int nb_column);
