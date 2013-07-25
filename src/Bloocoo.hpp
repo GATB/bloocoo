@@ -25,6 +25,8 @@
 #include <string>
 #include <sstream>
 
+#define TAB_MULTIVOTE_SIZE (16*16*128)
+
 /********************************************************************************/
 
 /** NOTE: we should not include namespaces here => only to make user life easier... */
@@ -90,8 +92,10 @@ public:
     Bloocoo ();
 
 	
+    unsigned int make_index(int pos1, int dist, int nt1, int nt2);
+    int decode_index(unsigned int idx, int * pos1, int * dist, int * nt1, int * nt2);
 
-	
+    
 	void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction);
 	int apply_correction(char *readseq, int pos, int good_nt);
 	int twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[]);

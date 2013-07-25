@@ -198,7 +198,7 @@ public:
                         
                         	if(nb_errors_cor == 0){
                         	
-		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-2); // en fait plus utilisé en interne  dapres gaetan ..
+		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-2); // pourquoi -2 et pas -1 ?
 		                        nb_checked = max(nb_checked, 0);
 		                        
 		                        //if first gap, cannot correct from the left side of the gap
@@ -288,8 +288,8 @@ public:
         }
         
         if(PRINT_DEBUG){ 
-        	printf("%s", _bloocoo.__badReadStack.c_str());
-        	//_bloocoo.print_read_if_not_fully_corrected(&model, s);
+        	//printf("%s", _bloocoo.__badReadStack.c_str());
+        	_bloocoo.print_read_if_not_fully_corrected(&model, s);
         }
         
         //if (getSynchro()-)
@@ -313,7 +313,9 @@ public:
         : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
           model(_bloocoo._kmerSize), itKmer(model), _synchro(this->newSynchro())
-    {}
+    {
+        _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
+    }
 
     ~CorrectReads ()
     {
@@ -324,7 +326,8 @@ public:
     Bloom<kmer_type>& _bloom; // the bloom containing the solid kmers
     Bank&             _outbank; // the bank cto insert the result : corrected reads
     Bloocoo &         _bloocoo; // the parent bloocoo object
-
+    unsigned char *   _tab_multivote;
+    
     KmerModel           model;
     KmerModel::Iterator itKmer;
 
@@ -639,7 +642,13 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
     
     //If the number of checkable kmers is inferior to the vote threshold then the vote is cancelled
 	if(nb_kmer_check < vote_threshold){
-		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (nb_kmer_checked < nb_min_valid)\n";}
+		if(PRINT_DEBUG){
+            std::ostringstream oss;
+			oss << nb_kmer_check;
+			std::ostringstream oss2;
+			oss2 << vote_threshold;
+            __badReadStack += "\t\t\tfailed (nb_kmer_checked < nb_min_valid) " + oss.str() + " < " + oss2.str() + " \n";
+        }
 		return 0;
 	}
 	
@@ -1225,7 +1234,8 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 		}
 		
 		nb_errors_cor = multiMutateVoteCorrection(start_pos, readseq, kmers, new_nb_checked, max_nb_mutation);
-		start_pos += new_nb_checked;
+		//start_pos += new_nb_checked;
+        start_pos += 20;
 	}
 	
 	return nb_errors_cor;
@@ -1248,6 +1258,10 @@ int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* 
 		return 0;
 	}
 	
+    //pour remettre à 0 la table de vote
+    // memset(_tab_multivote, 0, TAB_MULTIVOTE_SIZE*sizeof(unsigned char));
+    
+    
 	int nb_column = nb_kmer_check + _kmerSize - 1;
 	std::map<std::string, int> votes;
 	
@@ -1572,3 +1586,47 @@ int Bloocoo::readSideCorrection(int pos, char *readseq, kmer_type* kmers[], int 
 }
 
 
+
+/*********************************************************************
+ ** METHOD  :make_indice
+ ** PURPOSE :encode mutation pair info (pos1, dist_to_pos2, nt1,nt2) into a single int
+ ** INPUT   :
+ ** OUTPUT  :
+ ** RETURN  :
+ ** REMARKS :
+ *********************************************************************/
+unsigned int Bloocoo::make_index(int pos1, int dist, int nt1, int nt2)
+{
+    unsigned int idx = pos1;
+    
+    idx <<= 4;
+    idx |=  (dist & 15); //dist is constrained to [0-15]
+    idx <<= 2;
+    idx |=  nt1; 
+    idx <<= 2;
+    idx |=  nt2;
+    
+    return idx;
+}
+
+
+/*********************************************************************
+ ** METHOD  :make_indice
+ ** PURPOSE :encode mutation pair info (pos1, dist_to_pos2, nt1,nt2) into a single int
+ ** INPUT   :
+ ** OUTPUT  :
+ ** RETURN  :
+ ** REMARKS :
+ *********************************************************************/
+int Bloocoo::decode_index(unsigned int idx, int * pos1, int * dist, int * nt1, int * nt2)
+{
+    *nt2 = idx & 3;
+    idx >>= 2;
+    *nt1 = idx & 3;
+    idx >>= 2;
+    *dist = idx & 15;
+    idx >>= 4;
+    *pos1 = idx;
+    
+    return *pos1;
+}
