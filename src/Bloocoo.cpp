@@ -99,7 +99,6 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 
 
 
-
 /********************************************************************************/
 //functor for read correction this is the code to correct a single read
 /********************************************************************************/
@@ -540,6 +539,10 @@ void Bloocoo::execute ()
 
     _errfile = System::file().newFile (ferrfile, "wb");
 
+    //file with list of errors, for testing purposes, with name of method responsible of correction
+    string ferrfile2 = prefix + string ("_bloocoo_corr_errs_full.tab");
+    
+    _errfile_full = System::file().newFile (ferrfile2, "wb");
     /*************************************************/
     // We iterate over sequences and correct them
     /*************************************************/
@@ -677,7 +680,7 @@ int Bloocoo::twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[])
     }
     
     if(nb_alternative == 1){
-    	int nb_correction = apply_correction(readseq, pos, good_nt);
+    	int nb_correction = apply_correction(readseq, pos, good_nt,TWO_SIDED);
     	if(PRINT_STATS){ __correction_methods_successes[TWO_SIDED] += nb_correction; }
         return nb_correction;
     }
@@ -889,7 +892,7 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 	//else if nb_nt_max > 1 then there are more than one candidate for the correction
 	//so we cannot determine a good correction, the correction is cancelled.
 	if(nb_alternative == 1){
-		int nb_correction = apply_correction(readseq, corrected_pos, good_nt);
+		int nb_correction = apply_correction(readseq, corrected_pos, good_nt,AGRESSIVE);
     	if(PRINT_STATS){ __correction_methods_successes[AGRESSIVE] += nb_correction; }
         return nb_correction;
 	}
@@ -1072,7 +1075,7 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 		}
 		if(nb_alternative == 1){
 			corrected_pos = start_pos + i;
-			int nb_cor = apply_correction(readseq, corrected_pos, good_nt);
+			int nb_cor = apply_correction(readseq, corrected_pos, good_nt,VOTE);
 			nb_correction += nb_cor;
 	    	if(PRINT_STATS){ __correction_methods_successes[VOTE] += nb_cor; }
 		}
@@ -1096,12 +1099,13 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 ** RETURN  :
 ** REMARKS :
 *********************************************************************/
-int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
+int Bloocoo::apply_correction(char *readseq, int pos, int good_nt,int algo){
 	if(!is_pos_correctable(pos, readseq)){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tFailed in apply_correction (non correctable pos)\n"; }
 		return 0;
 	}
 	
+    static const char* methodname[] = { "twosided", "aggressive", "vote", "multi" , "side"  };
 
 	if(PRINT_DEBUG){
 		std::ostringstream oss;
@@ -1115,6 +1119,8 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt){
 	//printf("\t\t%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
 	
     _errfile->print("%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
+    _errfile_full->print("%i\t%i\t%c\t%c;%s\n",_seq_num,pos,bin2NT[good_nt],readseq[pos],methodname[algo]);
+
     readseq[pos] = bin2NT[good_nt]; //correc sequence in ram
     // printf("error found pos %i  read %i\n",ii, _bloocoo._seq_num);
     _corrected_pos.push_back(pos);
@@ -1461,11 +1467,11 @@ int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* 
 	decode_index(good_index, &pos1, &dist, &nt1, &nt2);
 	//printf("\t%i %c %i %c\n", pos1, bin2NT[nt1], dist, bin2NT[nt2]);
 	
-	int nb_cor = apply_correction(readseq, start_pos+pos1, nt1);
+	int nb_cor = apply_correction(readseq, start_pos+pos1, nt1,MULTI_MUTATE_VOTE);
 	if(PRINT_STATS){ __correction_methods_successes[MULTI_MUTATE_VOTE] += nb_cor; }
 	nb_correction += nb_cor;
 		
-	nb_cor = apply_correction(readseq, start_pos+pos1+dist, nt2);
+	nb_cor = apply_correction(readseq, start_pos+pos1+dist, nt2,MULTI_MUTATE_VOTE);
 	if(PRINT_STATS){ __correction_methods_successes[MULTI_MUTATE_VOTE] += nb_cor; }
 	nb_correction += nb_cor;
 		
@@ -1782,7 +1788,7 @@ int Bloocoo::readSideCorrection(int pos, char *readseq, kmer_type* kmers[], int 
 	//else if nb_nt_max > 1 then there are more than one candidate for the correction
 	//so we cannot determine a good correction, the correction is cancelled.
 	if(nb_alternative == 1){
-		int nb_correction = apply_correction(readseq, corrected_pos, good_nt);
+		int nb_correction = apply_correction(readseq, corrected_pos, good_nt,READ_SIDE);
     	if(PRINT_STATS){ __correction_methods_successes[READ_SIDE] += nb_correction; }
         return nb_correction;
 	}

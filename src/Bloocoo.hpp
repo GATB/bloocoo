@@ -77,6 +77,8 @@ public:
     static const char* STR_NB_VALIDATED_KMERS;
     
     IFile*      _errfile;
+    IFile*      _errfile_full;
+
 	std::vector<int> _corrected_pos;
 	
 	std::string __badReadStack; //Variable de debug qui contient l'empreinte de la correction des reads
@@ -97,7 +99,7 @@ public:
 
     
 	void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction);
-	int apply_correction(char *readseq, int pos, int good_nt);
+	int apply_correction(char *readseq, int pos, int good_nt,int algo);
 	int twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[]);
 	int aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int readlen, Direction direction);
 	int voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked);
