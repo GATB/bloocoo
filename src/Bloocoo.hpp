@@ -78,6 +78,7 @@ public:
     
     IFile*      _errfile;
     IFile*      _errfile_full;
+    IFile*      _debug;
 
 	std::vector<int> _corrected_pos;
 	

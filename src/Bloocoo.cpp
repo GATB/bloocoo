@@ -88,6 +88,7 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 
 #define PRINT_STATS 1
 
+#define PRINT_LOG_MULTI 1
 
 
 
@@ -334,7 +335,7 @@ public:
 				                	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tVote correction (big hole 2)\n"; }
 				                	nb_errors_cor = _bloocoo.voteCorrectionInUntrustedZone(ii- untrusted_zone_size, ii-2, readseq, kmers, nb_checked);
 				            	}
-                    	
+
                     			if(nb_errors_cor == 0){
 				                	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tMulti Mutate Vote correction (big hole 2)\n"; }
 				                	nb_errors_cor = _bloocoo.multiMutateVoteCorrectionInUntrustedZone(ii- untrusted_zone_size, ii-2, readseq, kmers, nb_checked, _tab_multivote);
@@ -544,6 +545,12 @@ void Bloocoo::execute ()
     string ferrfile2 = prefix + string ("_bloocoo_corr_errs_full.tab");
     
     _errfile_full = System::file().newFile (ferrfile2, "wb");
+    
+#if PRINT_LOG_MULTI
+    string ferrfile3 = prefix + string ("_debug.tab");
+    
+    _debug = System::file().newFile (ferrfile3, "wb");
+#endif
     /*************************************************/
     // We iterate over sequences and correct them
     /*************************************************/
@@ -1039,7 +1046,7 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 	//print_votes(votes, nb_column);
 
 	//Search max vote in the matrix
-	int vote, maxVote, nb_max_vote= 0;
+	int vote, maxVote = 0 , nb_max_vote= 0;
 	for (int i = 0; i < nb_column; i++) {
 		for (int nt=0; nt < 4; nt++) {
 			vote = votes[i][nt];
@@ -1372,8 +1379,11 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 	
 	//_tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
 	
+#if PRINT_LOG_MULTI
+    _debug->print("%i\t",end_pos-start_pos +1);
+#endif
 	int nb_errors_cor = 0;
-	
+	int nz=0;
 	while(nb_errors_cor == 0 && start_pos < end_pos){
 		int untrusted_zone_size = end_pos - start_pos;
 		int new_nb_checked = min(nb_kmer_checked, untrusted_zone_size);
@@ -1387,11 +1397,14 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 		 	__badReadStack += "\tMulti Mutate Vote pos: " + oss.str() + " " + oss2.str() + "\n";
 		}
 		
+        nz++;
 		nb_errors_cor = multiMutateVoteCorrection(start_pos, readseq, kmers, new_nb_checked, _tab_multivote);
 		//start_pos += new_nb_checked;
         start_pos += _kmerSize/2;
 	}
-	
+#if PRINT_LOG_MULTI
+    _debug->print("%i\t%i\n",nz,nb_errors_cor);
+#endif
 	return nb_errors_cor;
 }
 
