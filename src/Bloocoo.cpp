@@ -313,8 +313,8 @@ public:
                         
                         	if(nb_errors_cor == 0){
                         		nb_checked = max_nb_kmers_checked;
-		                        //nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-2); // pourquoi -2 et pas -1 ?
-		                        //nb_checked = max(nb_checked, 0);
+		                        nb_checked = min(max_nb_kmers_checked, untrusted_zone_size-1); // -2 changed to -1 : was caus of pb for sides
+		                        nb_checked = max(nb_checked, 0);
 		                        
 		                        //if first gap, cannot correct from the left side of the gap
 		                        //2eme condition: Agressive right peut corriger le debut si le trou est plus long que sizeKmer mais est-ce utile?
@@ -376,12 +376,13 @@ public:
                     
                     //end of the read, we should treat this gap here correc snp with trad method
                     if(ii == (readlen-sizeKmer)){
-                        nb_checked = max_nb_kmers_checked;//min(max_nb_kmers_checked, untrusted_zone_size-1);
-                        //nb_checked = max(nb_checked, 0);
+                        nb_checked = max_nb_kmers_checked;
+                        nb_checked =  min(max_nb_kmers_checked, untrusted_zone_size);
+                        nb_checked = max(nb_checked, 0);
                         
                         if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tAggressive correction (end)\n"; }
                         nb_errors_cor = _bloocoo.aggressiveCorrection(readlen - untrusted_zone_size - sizeKmer + 1, readseq,  kmers, nb_checked, readlen ,Bloocoo::RIGHT);
-                            
+                        
                         if(nb_errors_cor == 0){
                         	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tVote correction (end)\n"; }
 							nb_errors_cor = _bloocoo.voteCorrectionInUntrustedZone(readlen - (untrusted_zone_size-1) - sizeKmer , readlen-sizeKmer, readseq, kmers, nb_checked);
@@ -1038,16 +1039,26 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 	//print_votes(votes, nb_column);
 
 	//Search max vote in the matrix
-	int vote, maxVote = 0;
+	int vote, maxVote, nb_max_vote= 0;
 	for (int i = 0; i < nb_column; i++) {
 		for (int nt=0; nt < 4; nt++) {
 			vote = votes[i][nt];
+            if (vote == maxVote) {
+                nb_max_vote ++ ;
+			}
 			if (vote > maxVote) {
 				maxVote = vote;
+                nb_max_vote =1;
 			}
 		}
 	}
 
+    
+    if(nb_max_vote !=1 ){
+		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed nb_max_vote !=1 \n"; }
+		return 0;
+	}
+    
 	//int t = (nb_kmer_check*25)/100;
 	//t = max(2, t);
 	//int t = max(1, nb_kmer_check);
@@ -1062,6 +1073,7 @@ int Bloocoo::voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], in
 	int nb_correction = 0;
 
 	
+    //si plusieurs max vote, on les corrige tous : ptet cest pas bien : ils sont peut etre plus proches qun kmer, normalement impossible avec  1 muta
 	
 	//For each column in the matrix, if the max vote is find and is uniq we can apply the correction
 	for (int i = 0; i < nb_column; i++) {
