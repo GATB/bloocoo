@@ -88,7 +88,7 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 
 #define PRINT_STATS 1
 
-#define PRINT_LOG_MULTI 1
+#define PRINT_LOG_MULTI 0
 
 
 
@@ -338,7 +338,7 @@ public:
 
                     			if(nb_errors_cor == 0){
 				                	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tMulti Mutate Vote correction (big hole 2)\n"; }
-				                	nb_errors_cor = _bloocoo.multiMutateVoteCorrectionInUntrustedZone(ii- untrusted_zone_size, ii-2, readseq, kmers, nb_checked, _tab_multivote);
+				                	nb_errors_cor = _bloocoo.multiMutateVoteCorrectionInUntrustedZone(ii- untrusted_zone_size, ii-2, readseq, kmers, nb_checked, _tab_multivote,-1,ii-2,readlen);
 				            	}
                     			
 		                    
@@ -391,7 +391,7 @@ public:
                         
                         if(nb_errors_cor == 0){
 		                	if(PRINT_DEBUG){ _bloocoo.__badReadStack += "\t\tMulti Mutate Vote correction (end)\n"; }
-		                	nb_errors_cor = _bloocoo.multiMutateVoteCorrectionInUntrustedZone(readlen - (untrusted_zone_size-1) - sizeKmer, readlen-sizeKmer, readseq, kmers, nb_checked, _tab_multivote);
+		                	nb_errors_cor = _bloocoo.multiMutateVoteCorrectionInUntrustedZone(readlen - (untrusted_zone_size-1) - sizeKmer, readlen-sizeKmer, readseq, kmers, nb_checked, _tab_multivote,readlen - untrusted_zone_size ,-1,readlen);
 		            	}
                     }
                     
@@ -594,7 +594,8 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
 
     double lg2 = log(2);
     float NBITS_PER_KMER = log (16*_kmerSize*(lg2*lg2))/(lg2*lg2);
-
+    NBITS_PER_KMER = 12;
+    printf("NBITS per kmer %f \n",NBITS_PER_KMER);
     u_int64_t solidFileSize = (System::file().getSize(_solidFile) / sizeof (kmer_type));
 
     u_int64_t estimatedBloomSize = (u_int64_t) ((double)solidFileSize * NBITS_PER_KMER);
@@ -609,7 +610,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     LOCAL (itKmers);
 
     /** We instantiate the bloom object. */
-    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize, (int)floorf (0.7*NBITS_PER_KMER), getInput()->getInt(Tool::STR_NB_CORES));
+    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize,7 , getInput()->getInt(Tool::STR_NB_CORES)); //(int)floorf (0.7*NBITS_PER_KMER)
     Bloom<kmer_type>* bloom = builder.build ();
 
     /** We return the created bloom filter. */
@@ -837,7 +838,7 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 			votes[nt] += 1;
         }
         else{
-        	continue;
+        	continue; // if first kmer is not valid, this possible nt is eliminated
         }
 
 		//nb_kmer_check-1: -1 because the first mutation above is counted as a kmer check
@@ -1368,7 +1369,7 @@ bool Bloocoo::is_pos_correctable(int pos, char* readseq){
 ** RETURN  :
 ** REMARKS :
 *********************************************************************/
-int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, unsigned char* _tab_multivote){
+int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, unsigned char* _tab_multivote, int expected_first_pos, int expexted_second_pos, int readlen){
 	//printf("%i:    %i %i\n", _seq_num, start_pos, end_pos);
 	//printf("\n\t");
 	//(*kmers[start_pos]).printASCII(_kmerSize);
@@ -1398,7 +1399,7 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 		}
 		
         nz++;
-		nb_errors_cor = multiMutateVoteCorrection(start_pos, readseq, kmers, new_nb_checked, _tab_multivote);
+		nb_errors_cor = multiMutateVoteCorrection(start_pos, readseq, kmers, new_nb_checked, _tab_multivote,expected_first_pos,expexted_second_pos,readlen);
 		//start_pos += new_nb_checked;
         start_pos += _kmerSize/2;
 	}
@@ -1417,9 +1418,23 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 ** RETURN  :
 ** REMARKS :
 *********************************************************************/
-int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, unsigned char* _tab_multivote)
+int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, unsigned char* _tab_multivote,int expected_first_pos, int expected_second_pos, int readlen)
 {
-	int vote_threshold = _nb_min_valid;
+    
+//    int current_max_nb_checkable = 999999;
+//    if(expected_second_pos > 0 &&  expected_second_pos < 10){
+//        current_max_nb_checkable = 3;
+//    }
+//    if(expected_first_pos > 0   &&  (readlen -expected_first_pos)<10 ){
+//    	current_max_nb_checkable = 3;
+//    }
+//    
+//    int vote_threshold = min(current_max_nb_checkable, _nb_min_valid);
+//    
+//    
+    
+    int vote_threshold = _nb_min_valid;
+
 	if(nb_kmer_check < vote_threshold){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (nb_kmer_checked < nb_min_valid)\n";}
 		return 0;
@@ -1438,10 +1453,12 @@ int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* 
 	
 	for(int i=0; i < nb_kmer_check; i++){
 		kmer_type current_kmer = *kmers[start_pos+i];
-		multiMutateVoteCorrectionRec(start_pos, i, current_kmer, readseq, kmers, nb_kmer_check, 0, 0, _tab_multivote, &max_vote, &nb_max_vote, &good_index, 0, 0);
+		multiMutateVoteCorrectionRec(start_pos, i, current_kmer, readseq, kmers, nb_kmer_check, 0, 0, _tab_multivote, &max_vote, &nb_max_vote, &good_index, 0, 0,expected_first_pos,expected_second_pos);
 		//multiMutateVoteCorrectionRec(start_pos, i, current_kmer, readseq, kmers, nb_kmer_check, 0, 0, _tab_multivote, 0, 0);
 	}
-	
+
+    
+    
 	//Search max vote in the hash
 
 	/*
@@ -1579,7 +1596,7 @@ int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* 
 ** REMARKS :
 *********************************************************************/
 //int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1){
-int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1){
+int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1, int expected_first_pos, int expected_second_pos){
 	int read_pos = start_pos + kmer_offset;
 	
 	
@@ -1598,7 +1615,30 @@ int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_t
 		if(!is_pos_correctable(read_pos+kpos, readseq)){
 			continue;
 		}
-	
+        
+        //si celui ci a abs 1
+        //expected first pos is known, restrict search to +-1
+		if((expected_first_pos >=0) &&
+           (current_nb_mutation == 0) &&
+           abs(read_pos+kpos - expected_first_pos) > 0 ){ //only test pos +-1 of expected error pos
+			continue;
+		}
+        
+        //ceux là (extension vers left) ne semblent pas impacter recall, et gain perf correct
+        //expected second pos is known  restrict first to max_dist away
+        if((expected_second_pos >=0) &&
+           (current_nb_mutation == 0) &&
+           abs(read_pos+kpos - expected_second_pos) >  (1+_max_multimutation_distance) ){
+			continue;
+		}
+    
+        if((expected_second_pos >=0) &&
+           (current_nb_mutation == 1) &&
+           abs(read_pos+kpos - expected_second_pos) > 0 ){
+			continue;
+		}
+        
+        
 		int original_nt = (readseq[read_pos+kpos]>>1)&3;
 		
 		//Iterating A, C, G, T except the original_nt
@@ -1654,7 +1694,7 @@ int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_t
 			//The kmer_index and the current number of mutation is incremented 
 			else{
 				//multiMutateVoteCorrectionRec(start_pos, kmer_offset, mutated_kmer, readseq, kmers, nb_kmer_check, kpos+kmer_index+1, current_nb_mutation+1, _tab_multivote, kmer_offset+kpos, nt);
-				multiMutateVoteCorrectionRec(start_pos, kmer_offset, mutated_kmer, readseq, kmers, nb_kmer_check, kpos+kmer_index+1, current_nb_mutation+1, _tab_multivote, max_vote, nb_max_vote, good_index, kmer_offset+kpos, nt);
+				multiMutateVoteCorrectionRec(start_pos, kmer_offset, mutated_kmer, readseq, kmers, nb_kmer_check, kpos+kmer_index+1, current_nb_mutation+1, _tab_multivote, max_vote, nb_max_vote, good_index, kmer_offset+kpos, nt,expected_first_pos,expected_second_pos);
 			}
 		}
 	}
