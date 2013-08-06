@@ -1400,8 +1400,8 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 		
         nz++;
 		nb_errors_cor = multiMutateVoteCorrection(start_pos, readseq, kmers, new_nb_checked, _tab_multivote,expected_first_pos,expexted_second_pos,readlen);
-		//start_pos += new_nb_checked;
-        start_pos += _kmerSize/2;
+		start_pos += new_nb_checked;
+		// start_pos += _kmerSize/2;
 	}
 #if PRINT_LOG_MULTI
     _debug->print("%i\t%i\n",nz,nb_errors_cor);
@@ -1421,19 +1421,21 @@ int Bloocoo::multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos
 int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, unsigned char* _tab_multivote,int expected_first_pos, int expected_second_pos, int readlen)
 {
     
-//    int current_max_nb_checkable = 999999;
-//    if(expected_second_pos > 0 &&  expected_second_pos < 10){
-//        current_max_nb_checkable = 3;
-//    }
-//    if(expected_first_pos > 0   &&  (readlen -expected_first_pos)<10 ){
-//    	current_max_nb_checkable = 3;
-//    }
-//    
-//    int vote_threshold = min(current_max_nb_checkable, _nb_min_valid);
+    int current_max_nb_checkable = 999999;
+    if(expected_second_pos > 0 &&  expected_second_pos < 10){
+        current_max_nb_checkable = 3;
+    }
+    if(expected_first_pos > 0   &&  (readlen -expected_first_pos)<10 ){
+    	current_max_nb_checkable = 3;
+    }
+    
+    int vote_threshold = min(current_max_nb_checkable, _nb_min_valid);
+    //  vote_threshold = 3;
+
 //    
 //    
     
-    int vote_threshold = _nb_min_valid;
+//    int vote_threshold = _nb_min_valid;
 
 	if(nb_kmer_check < vote_threshold){
 		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (nb_kmer_checked < nb_min_valid)\n";}
