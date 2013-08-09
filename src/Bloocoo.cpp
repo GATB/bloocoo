@@ -443,7 +443,7 @@ public:
     : _bloom(NULL), _outbank(NULL), _bloocoo(NULL),
     _total_nb_errors_corrected (NULL), _local_nb_errors_corrected(0)/*,model(31), itKmer(model)*/
     {
-        printf("------- CorrectReads default Constructor  %p --------- \n",this);
+       // printf("------- CorrectReads default Constructor  %p --------- \n",this);
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
     }
     
@@ -453,17 +453,17 @@ public:
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
           /*model(_bloocoo->_kmerSize), itKmer(model),*/ _synchro(this->newSynchro())
     {
-        printf("------- CorrectReads Custom Constructor  %p ---------\n",this);
+        //printf("------- CorrectReads Custom Constructor  %p ---------\n",this);
 
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
     }
 
     ~CorrectReads ()
     {
-        printf("------- CorrectReads Destructor  %p ---------\n",this);
+      //  printf("------- CorrectReads Destructor  %p ---------\n",this);
 
         /** We increase the global number of corrected errors. */
-        printf("local nb errors %lli \n",_local_nb_errors_corrected);
+        //printf("local nb errors %lli \n",_local_nb_errors_corrected);
         __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
      //   free(_tab_multivote); // pourquoi plante ? lobjet correct read est il copié qq part ?
         
