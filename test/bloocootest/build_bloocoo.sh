@@ -2,10 +2,10 @@
 
 pwd=$PWD
 
-cd
 
-cd workspace/gatb-tools/gatb-tools/tools/bloocoo/build/
-make
-cp Bloocoo ~/workspace/scripts/bloocootest/
+cd ~/workspace/gatb-tools/gatb-tools/tools/bloocoo/build/
+make Bloocoo
 
-cd ${pwd}
+cp Bloocoo ~/../../local/bloocootest/
+
+
