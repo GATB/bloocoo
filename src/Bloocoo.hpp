@@ -111,7 +111,8 @@ public:
 	int multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1,int expected_first_pos,int expected_second_pos, Sequence& s,std::vector<int>& corrected_pos);
 	//int multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int pos1, int nt1);
 	
-	int readSideCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction, Sequence& s,std::vector<int>& corrected_pos);
+	void extendedAgressiveCorrection(int votes[4], KmerModel* model, kmer_type* last_mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction);
+	void extendedAgressiveCorrectionRec(int votes[4], KmerModel* model, kmer_type* mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction, bool posVoted[], int depth);
 	
 	void codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction);
 	void codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction);

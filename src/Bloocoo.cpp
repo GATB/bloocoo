@@ -142,7 +142,7 @@ public:
 			
         //int min_nb_kmer_valid_offset = -1;
         
-        for(int j=0; j<5; j++){
+        for(int j=0; j<1; j+=2){
 			int min_nb_kmer_valid_offset = j;
 			
 			int nb_kmer_trusted = 0;
@@ -761,24 +761,26 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 		return 0;
 	}
 	
-	
+	/*
     if(corrected_pos==0){
     	if(PRINT_DEBUG){__badReadStack += "\t\tErr pos 0 => Read Side correction\n"; }
     	//printf("start read side correction (err_pos: %i)\n", corrected_pos);
     	//printf("seq_num: %i\n", _seq_num);
-    	int nb_cor = readSideCorrection(pos, readseq, kmers, 2, LEFT,cur_seq,tab_corrected_pos);
+    	int nb_cor = extendedAgressiveCorrection(pos, readseq, kmers, 2, LEFT,cur_seq,tab_corrected_pos);
     	return nb_cor;
     }
     else if(corrected_pos==readlen-1){
     	if(PRINT_DEBUG){__badReadStack += "\t\tErr pos 99 => Read Side correction\n"; }
     	//printf("start read side correction (err_pos: %i)\n", corrected_pos);
     	//printf("seq_num: %i\n", _seq_num);
-    	int nb_cor = readSideCorrection(pos, readseq, kmers, 2, RIGHT,cur_seq,tab_corrected_pos);
+    	int nb_cor = extendedAgressiveCorrection(pos, readseq, kmers, 2, RIGHT,cur_seq,tab_corrected_pos);
     	return nb_cor;
-    }
+    }*/
     
     //Determine the minimum vote threshold
     //It's always the param _nb_min_valid except for the read sides (Sides have limited number of kmers to check)
+    //int min_valid = _nb_min_valid-min_nb_kmer_valid_offset;
+    
     int current_max_nb_checkable;
     if(direction ==RIGHT){
     	current_max_nb_checkable = readlen - corrected_pos;
@@ -786,14 +788,36 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
     else{
     	current_max_nb_checkable = corrected_pos + 1;
     }
-    int vote_threshold = min(current_max_nb_checkable, _nb_min_valid-min_nb_kmer_valid_offset);
-    nb_kmer_check = min(current_max_nb_checkable, nb_kmer_check-min_nb_kmer_valid_offset);
+    
+    nb_kmer_check -= min_nb_kmer_valid_offset;
     nb_kmer_check = max(1, nb_kmer_check);
+    int vote_threshold = _nb_min_valid-min_nb_kmer_valid_offset;
+    vote_threshold = max(1, vote_threshold);
+    
+    //printf("Pos: %i     nb_kmer_check: %i     max_kmer_checkable: %i     vote_treshold: %i\n", corrected_pos, nb_kmer_check, current_max_nb_checkable, vote_threshold);
+    
+    //int nb_extra_kmer = max(0, nb_kmer_check-current_max_nb_checkable);
+    //nb_extra_kmer = min(1, nb_extra_kmer);
+    int nb_extra_kmer = max(0, vote_threshold-current_max_nb_checkable);
+    //nb_extra_kmer = min(2, nb_extra_kmer);
+    
+    //current_max_nb_checkable += nb_extra_kmer;
+    //current_max_nb_checkable += nb_extra_kmer;
+    //current_max_nb_checkable = nb_extra_kmer + nb_kmer_check;
+    
+    
+    nb_kmer_check = min(current_max_nb_checkable, nb_kmer_check);
+    
+    //int vote_threshold = min(nb_extra_kmer + nb_kmer_check, _nb_min_valid-min_nb_kmer_valid_offset);
+    //nb_kmer_check = max(1, nb_kmer_check);
+    
+    //printf("Pos: %i      nb_extra_kmer: %i    nb_kmer_check: %i        vote_treshold: %i\n\n", corrected_pos, nb_extra_kmer, nb_kmer_check, vote_threshold);
     
     //printf("%i %i %i\n", corrected_pos, vote_threshold, nb_kmer_check);
     
+    
     //If the number of checkable kmers is inferior to the vote threshold then the vote is cancelled
-	if(nb_kmer_check < vote_threshold){
+	if(nb_kmer_check+nb_extra_kmer < vote_threshold){
 		if(PRINT_DEBUG){
             std::ostringstream oss;
 			oss << nb_kmer_check;
@@ -915,7 +939,12 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 		    }
 		    
 		}
+		
+		if(nb_extra_kmer > 0 /*&& votes[nt] > 0*/){
+			extendedAgressiveCorrection(votes, &model, &current_kmer, nt, nb_extra_kmer, direction);
+		}
     }
+
 
     //print_agressive_votes(votes);
 
@@ -1775,158 +1804,62 @@ int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_t
 ** RETURN  :
 ** REMARKS :
 *********************************************************************/
-//// readSideCorrection
-//
-// nb_kmer_check the number of additional kmers checked
-// pos = position of the solid kmer next to the untrusted zone
-// kmer_begin  = solid kmer at pos
-// Direction:
-//     RIGHT: We start from the last trusted kmer BEFORE the untrusted zone and try to correct the first error in this zone.
-//     LEFT:  We start from the first trusted kmer AFTER the untrusted zone and try to correct the last error in this zone.
-int Bloocoo::readSideCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Direction direction, Sequence& cur_seq,std::vector<int>& tab_corrected_pos)
+void Bloocoo::extendedAgressiveCorrection(int votes[4], KmerModel* model, kmer_type* last_mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction)
 {
     if(PRINT_STATS){ __correction_methods_calls[READ_SIDE] ++; }
 
-	//Determine corrected position depending of a left or right agressive correction
-    int corrected_pos;
-    if(direction ==RIGHT){
-        corrected_pos = pos+_kmerSize-1;
-    }
-    else{
-        corrected_pos = pos;
-    }
-    
-    //Cancelled the vote if the corrected position is not correctable
-	if(!is_pos_correctable(corrected_pos, readseq,tab_corrected_pos)){
-		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (position is already corrected)\n"; }
-		return 0;
+	bool posVoted[nb_kmer_check];
+	
+	for(int i=0; i<nb_kmer_check; i++){
+		posVoted[i] = false;
 	}
 	
-    //Determine the minimum vote threshold
-    //It's always the param _nb_min_valid except for the read sides (Sides have limited number of kmers to check)
-    int vote_threshold = nb_kmer_check;
-    
-    /*
-    //If the number of checkable kmers is inferior to the vote threshold then the vote is cancelled
-	if(nb_kmer_check < vote_threshold){
-		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (nb_kmer_checked < nb_min_valid)\n";}
-		return 0;
-	}*/
-	
-	
-	kmer_type kmer_begin = *kmers[pos];
-	
-	//printf("\tkmer_begin: "); kmer_begin.printASCII(_kmerSize);
-	int votes [4] = {0, 0, 0, 0};
-    int good_nt;
-	char nt_temp;
-    
-    KmerModel model (_kmerSize);
-    kmer_type current_kmer, current_kmer_min;
-    
-    int original_nt;
-    if(direction ==RIGHT){
-        original_nt = (readseq[corrected_pos]>>1)&3;
-    }
-    else{
-    	original_nt = (readseq[corrected_pos]>>1)&3;
-    }
-        
-    for(int nt=0; nt<4; nt++)
-    {
-		if(nt == original_nt){
-			continue;
-		}
-			
-		current_kmer = kmer_begin;
+	//printf("%i\n", posHasVote[0]);
+	//for(int i=0; i<nb_kmer_check; i++){
 		
-		if(direction ==RIGHT){
-			mutate_kmer(&current_kmer, 0, nt);
-		}
-		else{
-		    mutate_kmer(&current_kmer, _kmerSize-1, nt);
-		}
-		
-		//current_kmer = codeSeedBin(&model, &kmer_begin, nt, direction);
-        current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
-        
-        if(_bloom->contains(current_kmer_min)) //kmer is indexed
-        {
-			votes[nt] += 1;
-        }
-        else{
-        	//continue;
-        }
+	//printf("------------------------------------------------\n");
+	//printf("last kmer: "); (*last_mutated_kmer).printASCII(_kmerSize);
+	//print_agressive_votes(votes);
+	extendedAgressiveCorrectionRec(votes, model, last_mutated_kmer, mutated_nt, nb_kmer_check, direction, posVoted, 0);
+	//print_agressive_votes(votes);
+	//printf("------------------------------------------------\n");
+}
 
-		//printf("\t\tmutated_kmer: "); current_kmer.printASCII(_kmerSize);
-		//kmer_type current_kmer2 = current_kmer;
-		//nb_kmer_check-1: -1 because the first mutation above is counted as a kmer check
-		for (int ii=0; ii<nb_kmer_check-1; ii++)
+/*********************************************************************
+** METHOD  :
+** PURPOSE :
+** INPUT   :
+** OUTPUT  :
+** RETURN  :
+** REMARKS :
+*********************************************************************/
+void Bloocoo::extendedAgressiveCorrectionRec(int votes[4], KmerModel* model, kmer_type* mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction, bool posVoted[], int depth)
+{
+	if(depth >= nb_kmer_check){
+		return;
+	}
+	
+	for(int nt=0; nt<4; nt++){
+		
+		kmer_type current_kmer = *mutated_kmer;
+		codeSeedBin(model, &current_kmer, nt, direction);
+		
+		
+		
+		kmer_type current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
+		if(_bloom->contains(current_kmer_min)) //kmer is indexed
 		{
-			
-			for(int nt2=0; nt2<4; nt2++){
-				
-				kmer_type current_kmer2 = current_kmer;
-				codeSeedBin(&model, &current_kmer2, nt2, direction);
-				//printf("\t\t\tmutated_kmer: "); current_kmer2.printASCII(_kmerSize);
-				
-				current_kmer_min = min(current_kmer2, revcomp(current_kmer2, _kmerSize));
-				if(_bloom->contains(current_kmer_min)) //kmer is indexed
-				{
-				    votes[nt] += 1;
-				}
+			if(!posVoted[depth]){
+				//current_kmer.printASCII(_kmerSize);
+				votes[mutated_nt] += 1;
+				posVoted[depth] = true;
 			}
-		    
-		}
-    }
-
-    //print_agressive_votes(votes);
-
-	//Searching max score in votes
-	int max_score = votes[0];
-	for(int i=1; i<4; i++){
- 		if(votes[i] > max_score){
-			max_score = votes[i];
+			
+			extendedAgressiveCorrectionRec(votes, model, &current_kmer, mutated_nt, nb_kmer_check, direction, posVoted, depth+1);
+			
 		}
 	}
-
-	//int t = (nb_kmer_check*25)/100;
-	//int t = max(1, nb_kmer_check);
-	//int t = 1; //max(1, nb_kmer_check);
-	
-	if(max_score < vote_threshold){
-		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (max score %i is too low)\n", max_score; }
-		return 0;
-	}
-	
-	//printf("max: %i\n", max_score);
-
-	//We have the max score in votes, now we have to check if this score
-	//is uniq or if more than one nt has the max score
-	int nb_alternative = 0;
-
-	for(int i=0; i<4; i++){
- 		if(votes[i] == max_score){
-			nb_alternative += 1;
-			good_nt = i;
-		}
-	}
-
-	//printf("good_nt: %i, nb_alternative: %i\n", good_nt, nb_alternative);
-
-	//if max score is uniq we can correct the sequence
-	//else if nb_nt_max > 1 then there are more than one candidate for the correction
-	//so we cannot determine a good correction, the correction is cancelled.
-	if(nb_alternative == 1){
-		int nb_correction = apply_correction(readseq, corrected_pos, good_nt,READ_SIDE,cur_seq,tab_corrected_pos);
-    	if(PRINT_STATS){ __correction_methods_successes[READ_SIDE] += nb_correction; }
-        return nb_correction;
-	}
-    
-    if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (multiple alternative)\n"; }
-    
-    return 0;
-    
+		
 }
 
 
@@ -1974,3 +1907,4 @@ int Bloocoo::decode_index(unsigned int idx, int * pos1, int * dist, int * nt1, i
     
     return *pos1;
 }
+
