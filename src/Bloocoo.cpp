@@ -38,6 +38,8 @@
 #include "ReadWriter.h"
 
 
+//#define SERIAL // to force serial mode
+
 // We use the required packages
 using namespace std;
 
@@ -358,19 +360,19 @@ public:
         }
         
 
-//        getSynchro()->lock()  ;
-//        _outbank->insert (current_seq); //output corrected sequence
-//        getSynchro()->unlock()  ;
-        
-        
+#ifdef SERIAL
+        _outbank->insert (current_seq); //output corrected sequence
+#else
         _bankwriter->insert (current_seq);
         _temp_nb_seq_done ++;
-
+        
         if(_temp_nb_seq_done == 10000) // this val must be a divisor of ordered bank buffer size
         {
             _bankwriter->incDone(_temp_nb_seq_done);
             _temp_nb_seq_done=0;
         }
+#endif
+
        
         
         //    printf("%s\n",s.getDataBuffer());
@@ -400,28 +402,35 @@ public:
         _thread_id = __sync_fetch_and_add (_nb_living, 1);
 
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
-        printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
+      //  printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
 
     }
 
     ~CorrectReads ()
     {
-        printf("------- CorrectReads Destructor  %p --------- tid %i \n",this,_thread_id);
+      //  printf("------- CorrectReads Destructor  %p --------- tid %i \n",this,_thread_id);
 
         /** We increase the global number of corrected errors. */
       //  printf("local nb errors %lli \n",_local_nb_errors_corrected);
         _thread_id = __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
         
+        
+#ifndef SERIAL
         _bankwriter->incDone(_temp_nb_seq_done);
         _bankwriter->waitForWriter();
+#endif
+
         
         int nb_remaining = __sync_fetch_and_add (_nb_living, -1);
+
+#ifndef SERIAL
 
         if(nb_remaining==1)
         {
              _bankwriter->FlushWriter();
         }
-        
+#endif
+ 
      //   free(_tab_multivote); // pourquoi plante ? lobjet correct read est il copié qq part ?
         
     }
@@ -465,7 +474,7 @@ public:
         _local_nb_errors_corrected =0;
         _temp_nb_seq_done = 0;
         _thread_id = __sync_fetch_and_add (_nb_living, 1);
-        printf("------- CorrectReads copy construct  from  %p  into %p --------- tid %i \n",&cr,this,_thread_id);
+       // printf("------- CorrectReads copy construct  from  %p  into %p --------- tid %i \n",&cr,this,_thread_id);
 
 
     }
@@ -585,10 +594,16 @@ void Bloocoo::execute ()
 
      //   CorrectReads fct2(*bloom, outbank, *this,total_nb_errors_corrected) ;
      //   itSeq->iterate (fct2); //
-     //   setDispatcher (new SerialCommandDispatcher());
+     //   
         
         nb_corrector_threads_living = 0 ;
-       setDispatcher (  new ParallelCommandDispatcher (getInput()->getInt(STR_NB_CORES)) );
+        
+#ifdef SERIAL
+        setDispatcher (new SerialCommandDispatcher());
+#else
+        setDispatcher (  new ParallelCommandDispatcher (getInput()->getInt(STR_NB_CORES)) );
+#endif
+        
         
         getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank, this, &total_nb_errors_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000); // , 10000
         
