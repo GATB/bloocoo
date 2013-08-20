@@ -35,6 +35,8 @@
 
 #include <Bloocoo.hpp>
 #include <DSK.hpp>
+#include "ReadWriter.h"
+
 
 // We use the required packages
 using namespace std;
@@ -86,11 +88,11 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 //PRINT_DEBUG = 2: print reads states not fully corrected
 #define PRINT_DEBUG 0
 
-#define PRINT_STATS 1 // only in single thread mode
+#define PRINT_STATS 0 // only in single thread mode
 
 #define PRINT_LOG_MULTI 0
 
-#define ERR_TAB 1 // only in single thread mode
+#define ERR_TAB 0 // only in single thread mode
 
 
 
@@ -111,7 +113,7 @@ public:
     {
 
 //    	_bloocoo->_seq_num = s.getIndex();
-    //	printf("SEQ NUM: %i\n", current_seq.getIndex());
+    	//printf("SEQ NUM: %i\n", current_seq.getIndex());
         //if(s.getIndex() != 681){
         //	return;
         //}
@@ -355,15 +357,21 @@ public:
         	_bloocoo->print_read_if_not_fully_corrected(&model, current_seq);
         }
         
-        //if (getSynchro()-)
-        {
-           // getSynchro()->lock()  ;
-        }
-        _outbank->insert (current_seq); //output corrected sequence
-        //if (_synchro)  {
-         //   getSynchro()->unlock() ;// }
+
+//        getSynchro()->lock()  ;
+//        _outbank->insert (current_seq); //output corrected sequence
+//        getSynchro()->unlock()  ;
         
-       // _outbank.insert(s); //output corrected sequence
+        
+        _bankwriter->insert (current_seq);
+        _temp_nb_seq_done ++;
+
+        if(_temp_nb_seq_done == 10000) // this val must be a divisor of ordered bank buffer size
+        {
+            _bankwriter->incDone(_temp_nb_seq_done);
+            _temp_nb_seq_done=0;
+        }
+       
         
         //    printf("%s\n",s.getDataBuffer());
         //    printf("%s\n",readseq);
@@ -376,30 +384,44 @@ public:
     //default constructor
     CorrectReads ()
     : _bloom(NULL), _outbank(NULL), _bloocoo(NULL),
-    _total_nb_errors_corrected (NULL), _local_nb_errors_corrected(0)/*,model(31), itKmer(model)*/
+    _total_nb_errors_corrected (NULL), _local_nb_errors_corrected(0),_bankwriter(NULL),_temp_nb_seq_done(0)
     {
        // printf("------- CorrectReads default Constructor  %p --------- \n",this);
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
     }
     
     
-    CorrectReads (Bloom<kmer_type>* bloom, Bank* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected)
+    CorrectReads (Bloom<kmer_type>* bloom, Bank* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, int nb_cores, int * nbliving)
         : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
-          /*model(_bloocoo->_kmerSize), itKmer(model),*/ _synchro(this->newSynchro())
+          _synchro(this->newSynchro()),_temp_nb_seq_done(0), _nb_living(nbliving)
     {
-        //printf("------- CorrectReads Custom Constructor  %p ---------\n",this);
+        _bankwriter = new OrderedBankWriter(outbank,nb_cores*10000);
+        _thread_id = __sync_fetch_and_add (_nb_living, 1);
 
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
+        printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
+
     }
 
     ~CorrectReads ()
     {
-      //  printf("------- CorrectReads Destructor  %p ---------\n",this);
+        printf("------- CorrectReads Destructor  %p --------- tid %i \n",this,_thread_id);
 
         /** We increase the global number of corrected errors. */
-        //printf("local nb errors %lli \n",_local_nb_errors_corrected);
-        __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
+      //  printf("local nb errors %lli \n",_local_nb_errors_corrected);
+        _thread_id = __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
+        
+        _bankwriter->incDone(_temp_nb_seq_done);
+        _bankwriter->waitForWriter();
+        
+        int nb_remaining = __sync_fetch_and_add (_nb_living, -1);
+
+        if(nb_remaining==1)
+        {
+             _bankwriter->FlushWriter();
+        }
+        
      //   free(_tab_multivote); // pourquoi plante ? lobjet correct read est il copié qq part ?
         
     }
@@ -408,7 +430,10 @@ public:
     Bank *             _outbank; // the bank cto insert the result : corrected reads
     Bloocoo *         _bloocoo; // the parent bloocoo object
     unsigned char *   _tab_multivote;
+    int *  _nb_living;
+    int _thread_id;
     
+    OrderedBankWriter * _bankwriter;
     std::vector<int> _corrected_pos;
 
    // KmerModel           model;
@@ -419,31 +444,35 @@ public:
 
     u_int64_t *  _total_nb_errors_corrected;
     u_int64_t   _local_nb_errors_corrected;
-    
+    size_t _temp_nb_seq_done;
     
     
     //copy construct
     CorrectReads(const CorrectReads& cr) //called by dispatcher iterate to create N functors
     {
-        printf("------- CorrectReads copy construct  from  %p  into %p ---------\n",&cr,this);
 
-        //functors share smee bloom, outbank, bloocoo and synchronizer
+        //functors share smee bloom, bankwriter, bloocoo and synchronizer
         _bloom = cr._bloom;
         _outbank = cr._outbank;
         _bloocoo = cr._bloocoo;
         _synchro = cr._synchro;
-
+        _bankwriter = cr._bankwriter;
+        _nb_living = cr._nb_living;
+        
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
 
         _total_nb_errors_corrected = cr._total_nb_errors_corrected;
         _local_nb_errors_corrected =0;
+        _temp_nb_seq_done = 0;
+        _thread_id = __sync_fetch_and_add (_nb_living, 1);
+        printf("------- CorrectReads copy construct  from  %p  into %p --------- tid %i \n",&cr,this,_thread_id);
 
 
     }
     //assign
     CorrectReads& operator=(const CorrectReads& cr)
     {
-        printf("------- CorrectReads assign operator from  %p   ---------\n",&cr);
+     //   printf("------- CorrectReads assign operator from  %p   ---------\n",&cr);
 
     }
 
@@ -529,7 +558,8 @@ void Bloocoo::execute ()
     Bank outbank (fileName);
 
     u_int64_t total_nb_errors_corrected = 0;
-
+    int nb_corrector_threads_living;
+    
 #if ERR_TAB
     //file with list of errors, for testing purposes
     string ferrfile = prefix + string ("_bloocoo_corr_errs.tab");
@@ -555,10 +585,12 @@ void Bloocoo::execute ()
 
      //   CorrectReads fct2(*bloom, outbank, *this,total_nb_errors_corrected) ;
      //   itSeq->iterate (fct2); //
-        setDispatcher (new SerialCommandDispatcher());
-      // setDispatcher (  new ParallelCommandDispatcher (getInput()->getInt(STR_NB_CORES) ) );
+     //   setDispatcher (new SerialCommandDispatcher());
         
-        getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank, this, &total_nb_errors_corrected),10000); // , 10000
+        nb_corrector_threads_living = 0 ;
+       setDispatcher (  new ParallelCommandDispatcher (getInput()->getInt(STR_NB_CORES)) );
+        
+        getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank, this, &total_nb_errors_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000); // , 10000
         
         printf("---after dispatcher iterate ---\n");
     }
