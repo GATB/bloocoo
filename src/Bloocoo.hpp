@@ -27,7 +27,7 @@
 
 #define TAB_MULTIVOTE_SIZE (16*16*128)
 
-#define ERR_TAB 0 // only in single thread mode
+#define ERR_TAB 1 // only in single thread mode
 
 /********************************************************************************/
 
@@ -92,8 +92,7 @@ public:
 	int __correction_methods_calls[NB_CORRECTION_METHODS]; //Variable de debug pour afficher le nb d'appels
 	
 	int _max_multimutation_distance;
-//	std::ostringstream _oss; //Use to convert int to string many time per frame
-//	std::istringstream _iss; //Use to convert string to int many time per frame
+	bool _only_decrease_nb_min_valid;
 	
 public:
 
@@ -108,12 +107,12 @@ public:
 	void update_nb_errors_corrected(int nb_errors_corrected, u_int64_t* _local_nb_errors_corrected, bool* continue_correction);
 	int apply_correction(char *readseq, int pos, int good_nt,int algo, Sequence& cur_seq,std::vector<int>& corrected_pos);
 	int twoSidedCorrection(int pos, char *readseq, kmer_type* kmers[], Sequence& s,std::vector<int>& corrected_pos);
-	int aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int readlen, Direction direction, Sequence& s,std::vector<int>& corrected_pos, int min_nb_kmer_valid_offset);
-	int voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, Sequence& s,std::vector<int>& corrected_pos, int min_nb_kmer_valid_offset);
-	int voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Sequence& s,std::vector<int>& corrected_pos, int min_nb_kmer_valid_offset);
+	int aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, int readlen, Direction direction, Sequence& s,std::vector<int>& corrected_pos, int nb_kmer_offset);
+	int voteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, Sequence& s,std::vector<int>& corrected_pos, int nb_kmer_offset);
+	int voteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, Sequence& s,std::vector<int>& corrected_pos, int nb_kmer_offset);
 
-	int multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, unsigned char* _tab_multivote,int expected_first_pos,int expected_second_pos, int readlen, Sequence& s,std::vector<int>& corrected_pos, int min_nb_kmer_valid_offset);
-	int multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, unsigned char* _tab_multivote,int expected_first_pos,int expected_second_pos, int readlen, Sequence& s,std::vector<int>& corrected_pos, int min_nb_kmer_valid_offset);
+	int multiMutateVoteCorrectionInUntrustedZone(int start_pos, int end_pos, char *readseq, kmer_type* kmers[], int nb_kmer_checked, unsigned char* _tab_multivote,int expected_first_pos,int expected_second_pos, int readlen, Sequence& s,std::vector<int>& corrected_pos, int nb_kmer_offset);
+	int multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* kmers[], int nb_kmer_check, unsigned char* _tab_multivote,int expected_first_pos,int expected_second_pos, int readlen, Sequence& s,std::vector<int>& corrected_pos, int nb_kmer_offset);
 	void multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1,int expected_first_pos,int expected_second_pos, Sequence& s,std::vector<int>& corrected_pos);
 	//int multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int pos1, int nt1);
 	
