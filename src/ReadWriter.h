@@ -21,6 +21,8 @@
 #include <gatb/bank/impl/BankBinary.hpp>
 #include <gatb/kmer/impl/Model.hpp>
 #include <gatb/tools/collections/impl/Bloom.hpp>
+#include <gatb/tools/collections/impl/BagFile.hpp>
+#include <gatb/tools/collections/impl/BagCache.hpp>
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -36,9 +38,9 @@ using namespace gatb::core::kmer::impl;
 using namespace gatb::core::system;
 using namespace gatb::core::system::impl;
 using namespace gatb::core::bank::impl;
+using namespace gatb::core::tools::collections;
 
 /********************************************************************************/
-#define ASSIGN
 
 class OrderedBankWriter;
 
@@ -58,7 +60,7 @@ class OrderedBankWriter
 public:
     
     /** Constructor. */
-    OrderedBankWriter (Bank * bank, size_t buffsize)
+    OrderedBankWriter (Bag<Sequence> * bank, size_t buffsize)
     : _ref(0), _nbMax(buffsize), _buffWrite (buffsize), _buffReceive (buffsize), _base(0), _writer_available(1), _buffer_full(0), _idx(0),_to_be_written(0)
     {
         setRef(bank);
@@ -99,23 +101,19 @@ public:
     int _buffer_full;
     int _to_be_written;
     
-#ifdef ASSIGN
     std::vector<Sequence >      _buffWrite;
     std::vector<Sequence >      _buffReceive;
-#else
-    std::vector<Sequence *>      _buffWrite;
-    std::vector<Sequence *>      _buffReceive;
-#endif
+
 
     
 
     
-    Bank *        _ref;
+    Bag<Sequence> *        _ref;
 
 protected:
     
     
-    void setRef (Bank* ref)
+    void setRef (Bag<Sequence>* ref)
     {
         _ref=ref;
     }
@@ -137,7 +135,9 @@ protected:
     
 private:
     //assign
-    OrderedBankWriter& operator=(const OrderedBankWriter& bk){ }
+    OrderedBankWriter& operator=(const OrderedBankWriter& bk){
+        return *this;
+    }
     //copy construct
     OrderedBankWriter(const OrderedBankWriter& bk){ }
 	

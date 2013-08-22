@@ -38,7 +38,6 @@
 #include "ReadWriter.h"
 
 
-//#define SERIAL // to force serial mode
 
 // We use the required packages
 using namespace std;
@@ -94,7 +93,8 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 
 #define PRINT_LOG_MULTI 0
 
-#define ERR_TAB 0 // only in single thread mode
+
+//#define SERIAL // to force serial mode
 
 
 
@@ -366,7 +366,7 @@ public:
         _bankwriter->insert (current_seq);
         _temp_nb_seq_done ++;
         
-        if(_temp_nb_seq_done == 10000) // this val must be a divisor of ordered bank buffer size
+        if(_temp_nb_seq_done == 10000) // careful with this val, should be a divisor of buffer size in ordered bank
         {
             _bankwriter->incDone(_temp_nb_seq_done);
             _temp_nb_seq_done=0;
@@ -393,7 +393,7 @@ public:
     }
     
     
-    CorrectReads (Bloom<kmer_type>* bloom, Bank* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, int nb_cores, int * nbliving)
+    CorrectReads (Bloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, int nb_cores, int * nbliving)
         : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
           _synchro(this->newSynchro()),_temp_nb_seq_done(0), _nb_living(nbliving)
@@ -436,7 +436,7 @@ public:
     }
 
     Bloom<kmer_type> * _bloom; // the bloom containing the solid kmers
-    Bank *             _outbank; // the bank cto insert the result : corrected reads
+    Bag<Sequence> *             _outbank; // the bank cto insert the result : corrected reads
     Bloocoo *         _bloocoo; // the parent bloocoo object
     unsigned char *   _tab_multivote;
     int *  _nb_living;
@@ -479,11 +479,11 @@ public:
 
     }
     //assign
-    CorrectReads& operator=(const CorrectReads& cr)
-    {
-     //   printf("------- CorrectReads assign operator from  %p   ---------\n",&cr);
-
-    }
+//    CorrectReads& operator=(const CorrectReads& cr)
+//    {
+//     //   printf("------- CorrectReads assign operator from  %p   ---------\n",&cr);
+//        return *this;
+//    }
 
     
 };
@@ -507,7 +507,9 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
 
 		}
 	}
-    	
+#if ERR_TAB
+    pthread_mutex_init(&errtab_mutex, NULL);
+#endif
     /** We add options specific to this tool. */
     getParser()->add (new OptionOneParam (DSK::STR_KMER_SIZE,               "size of a kmer",   true));
     getParser()->add (new OptionOneParam (DSK::STR_URI_DATABASE,            "database",         true));   // not useful ?
@@ -566,6 +568,8 @@ void Bloocoo::execute ()
 
     Bank outbank (fileName);
 
+    BagCache<Sequence> *  outbank_cache = new BagCache<Sequence> (&outbank,10000);
+    
     u_int64_t total_nb_errors_corrected = 0;
     int nb_corrector_threads_living;
     
@@ -605,9 +609,10 @@ void Bloocoo::execute ()
 #endif
         
         
-        getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank, this, &total_nb_errors_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000); // , 10000
+        //replace outbank_cache with &outbank to remove usage of bagcache
+        getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000); // , 10000
         
-        printf("---after dispatcher iterate ---\n");
+       // printf("---after dispatcher iterate ---\n");
     }
 
     /*************************************************/
@@ -1009,7 +1014,7 @@ int Bloocoo::aggressiveCorrection(int pos, char *readseq, kmer_type* kmers[], in
 	//if(nb_possibles_firstk==1) vote_threshold=min(current_max_nb_checkable,3);
     
 	if(max_score < vote_threshold){
-		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (max score %i is too low)\n", max_score; }
+		if(PRINT_DEBUG){ __badReadStack += "\t\t\tfailed (max score %i is too low)\n"; }
 		return 0;
 	}
 	
@@ -1273,8 +1278,11 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt,int algo, Sequ
 	//printf("\t\t%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
 	
 #if ERR_TAB
+    pthread_mutex_lock(&errtab_mutex);
+
     _errfile->print("%i\t%i\t%c\t%c\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos]);
     _errfile_full->print("%i\t%i\t%c\t%c;%s\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos],methodname[algo]);
+    pthread_mutex_unlock(&errtab_mutex);
 #endif
     
     readseq[pos] = bin2NT[good_nt]; //correc sequence in ram
@@ -1736,7 +1744,7 @@ int Bloocoo::multiMutateVoteCorrection(int start_pos, char *readseq, kmer_type* 
 ** REMARKS :
 *********************************************************************/
 //int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1){
-int Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1, int expected_first_pos, int expected_second_pos, Sequence& cur_seq,std::vector<int>& tab_corrected_pos){
+void Bloocoo::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, char *readseq, kmer_type* kmers[], int nb_kmer_check, int kmer_index, int current_nb_mutation, unsigned char* _tab_multivote, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1, int expected_first_pos, int expected_second_pos, Sequence& cur_seq,std::vector<int>& tab_corrected_pos){
 	int read_pos = start_pos + kmer_offset;
 	
 	

@@ -51,43 +51,27 @@ using namespace gatb::core::tools::collections;
 using namespace gatb::core::tools::collections::impl;
 using namespace gatb::core::tools::math;
 
-//        __sync_fetch_and_add (&_total_nb_errors_corrected, _local_nb_errors_corrected);
 
 void OrderedBankWriter::insert(const Sequence&  seq)
 {
-    //seq id begins at 1
-    // or 0 ?
+
     size_t id;  
-   // Sequence * tempseq;
 
     while (1)
     {
          id  = seq.getIndex() - _base;
         if(id < _nbMax )
         {
-            
-#ifdef ASSIGN
+        
             _buffReceive[id] =  seq;
-
-#else
-            _buffReceive[id] =  (new Sequence(seq));
-
-#endif
-            
-           // printf("inserting into %i    ::  %p\n",id,_buffReceive[id]);
-         //   tempseq= new Sequence(seq);
-           // _buffReceive[id] =  *tempseq;
-          //  delete tempseq;
             break;
         }
         else
         {
             //the current thread has finished the block and is now ahead of others,
             //wait for other threads to finish filling the buffer
-
             
             pthread_mutex_lock(&writer_mutex);
-           // while (_buffer_full==0)
             while (id >= _nbMax )
             {
                 pthread_cond_wait(&buffer_full_cond, &writer_mutex);
@@ -154,6 +138,8 @@ void OrderedBankWriter::waitForWriter ()
 }
 
 
+
+
 //guaranteed by design only one thread at the end will call this
 void OrderedBankWriter::FlushWriter ()
 {
@@ -161,13 +147,12 @@ void OrderedBankWriter::FlushWriter ()
     if( _idx)
     {
       //  printf("\n flushing %zd base = %zd ++ \n",_idx,_base);
-        
         ///// wait for writer to be free
         pthread_mutex_lock(&writer_mutex);
         while (_writer_available==0) {
             pthread_cond_wait(&writer_available_cond, &writer_mutex);
         }
-        //buffReceive is full, will be written
+
         
         _buffWrite.swap(_buffReceive);
         _to_be_written = _idx;
@@ -179,6 +164,7 @@ void OrderedBankWriter::FlushWriter ()
     
     }
     
+    //wait again for writer to finish flushing
     pthread_mutex_lock(&writer_mutex);
     while (_buffer_full==1) {
         pthread_cond_wait(&writer_available_cond, &writer_mutex);
@@ -186,22 +172,19 @@ void OrderedBankWriter::FlushWriter ()
     pthread_mutex_unlock(&writer_mutex);
 }
 
+
+
+
+
 // writer thread gets a pointer to  orderbankwriter object
 void * writer(void * args)
 {
 
     thread_args *targ = (thread_args*) args;
     OrderedBankWriter * obw = targ->obw;
-    Bank * outbank = obw->_ref;
+    Bag<Sequence>* outbank = obw->_ref;
     int  * to_be_written =  &(obw->_to_be_written);
-#ifdef ASSIGN
     std::vector<Sequence> * _buffWrite = &(obw->_buffWrite);
-#else
-    std::vector<Sequence*> * _buffWrite = &(obw->_buffWrite);
-
-#endif
-    
-
 
     
 
@@ -211,34 +194,22 @@ void * writer(void * args)
         pthread_mutex_lock(&(obw->writer_mutex));
         while (obw->_buffer_full==0)
         {
-           // printf(" writer thread  going to sleep .. obw %p   cond %p\n",obw,&(obw->buffer_full_cond));
             pthread_cond_wait(&(obw->buffer_full_cond), &(obw->writer_mutex));
         }
-        obw->_writer_available = 0;
+        obw->_writer_available = 0; //writer becomes busy
       //  printf(" writer thread  awaken !! ..  will write %i elems \n",*to_be_written);
-
         pthread_mutex_unlock(&(obw->writer_mutex));
         
 
         //writes the buffer
-#ifdef ASSIGN
         for ( std::vector<Sequence>::iterator it = _buffWrite->begin(); (it != _buffWrite->end()) && (*to_be_written) ; it++)
-#else
-        for ( std::vector<Sequence*>::iterator it = _buffWrite->begin(); (it != _buffWrite->end()) && (*to_be_written); it++)
-#endif
-  
         {
-
-#ifdef ASSIGN
-             outbank->insert((*it));
-#else
-                outbank->insert(*(*it));
-#endif
-            //printf("to be written %i \n",*to_be_written);
-           ( *to_be_written) --;
+            outbank->insert((*it));
+            (*to_be_written) --;
         }
         
-        //signal buffer has been written
+        
+        //signal to others buffer has been written and writer is available again
         pthread_mutex_lock(&(obw->writer_mutex));
         obw->_buffer_full=0;
         obw->_writer_available=1;
