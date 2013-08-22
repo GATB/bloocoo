@@ -27,7 +27,7 @@
 
 #define TAB_MULTIVOTE_SIZE (16*16*128)
 
-#define ERR_TAB 0 // only in single thread mode
+#define ERR_TAB 1 // only in single thread mode
 
 /********************************************************************************/
 
