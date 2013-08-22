@@ -55,7 +55,7 @@ class TestReadCorrection:
 		
 		#Bloocoo correction
 		if correction_software == 0:
-			os.system("../../Bloocoo -db reads.fasta -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
+			os.system("../../Bloocoo -verbose -db reads.fasta -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
 			correction_duration = time.time() - t
 			#Remove bloocoo temp files
 			TestReadCorrection.remove_file("reads.fasta.bin")
@@ -74,7 +74,10 @@ class TestReadCorrection:
 			os.system("../../racer reads.fasta reads_corrected.fasta " + str(genome_size))
 			correction_duration = time.time() - t
 		#
-		elif correction_software == 3:
+		elif correction_software == 3: # bloocoo sans errtab
+			os.system("../../Bloocoo -verbose -db reads.fasta -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
+			correction_duration = time.time() - t
+		elif correction_software == 4:
 			pass
 			
 		#Use generic tests if bloocoo is not used
@@ -85,7 +88,6 @@ class TestReadCorrection:
 		#Recall
 		predicted = tp + fp
 		fn = true - tp
-		
 		if true == 0:
 			recall = 100
 		else:
