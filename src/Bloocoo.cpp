@@ -656,8 +656,8 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     );
     LOCAL (itKmers);
 
-    /** We instantiate the bloom object. */
-    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize,7 , getInput()->getInt(Tool::STR_NB_CORES)); //(int)floorf (0.7*NBITS_PER_KMER)
+    /** We instantiate the bloom object. */    
+    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(Tool::STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build ();
 
     /** We return the created bloom filter. */

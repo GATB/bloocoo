@@ -80,7 +80,7 @@ class TestReadCorrection:
 		#Use generic tests if bloocoo is not used
 		if correction_software != 0:
 			TestReadCorrection.print_params(params)
-			true, tp, fp = GenericTest.execute(params, "reads.fasta", "reads_corrected.fasta", "reads_errs.tab")
+			true, fp, tp = GenericTest.execute(params, "reads.fasta", "reads_corrected.fasta", "reads_errs.tab")
 			
 		#Recall
 		predicted = tp + fp
