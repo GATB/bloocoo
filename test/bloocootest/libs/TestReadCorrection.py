@@ -20,11 +20,6 @@ class TestReadCorrection:
 	@staticmethod
 	def main(params):
 		
-		#Print all test params before starting the tests
-		TestReadCorrection.print_params(params)
-			
-		#Correction will fail if this file exists
-		TestReadCorrection.remove_file("reads.fasta.bin")
 
 		#Convert params to variable
 		genome_size = str(params["genome_size"])
@@ -38,6 +33,25 @@ class TestReadCorrection:
 		regenerate_reads = bool(params["regenerate_reads"])
 		genome_filename = str(params["genome_filename"])
 		correction_software = int(params["correction_software"])
+		error_rate = str(params["error_rate"])
+		
+		#Check if the selected correction software need fastq format 
+		need_fastq = correction_software > 3
+		if need_fastq:
+			fastq_arg = "-fastq"
+			read_format = "fastq"
+		else:
+			fastq_arg = ""
+			read_format = "fasta"
+		params["need_fastq"] = need_fastq
+		input_reads_filename = "reads." + read_format
+		output_reads_filename = "reads_corrected." + read_format
+		
+		#Print all test params before starting the tests
+		TestReadCorrection.print_params(params)
+			
+		#Correction will fail if this file exists
+		TestReadCorrection.remove_file("reads.fasta.bin")
 		
 		#Mutaread
 		if regenerate_reads:
@@ -46,16 +60,16 @@ class TestReadCorrection:
 				os.system("../../gener_alea " + genome_size + " 1")
 				#Decoupage du genome contenu dans le fichier en multiple reads
 				#Params: file_in, file_out, reads_count, reads_length, error_rate, error_rate, error_rate
-				os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile")
+				os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile " + fastq_arg)
 			else:
-				os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile ")
+				os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile " + fastq_arg)
 		
 		#Reads correction
 		t = time.time()
 		
 		#Bloocoo correction
 		if correction_software == 0:
-			os.system("../../Bloocoo -verbose -db reads.fasta -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
+			os.system("../../Bloocoo -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
 			correction_duration = time.time() - t
 			#Remove bloocoo temp files
 			TestReadCorrection.remove_file("reads.fasta.bin")
@@ -66,24 +80,25 @@ class TestReadCorrection:
 			true, tp, fp, FP0, FP1, FP2 ,FP3, FP4, TC0, TC1, TC2 ,TC3, TC4 = BloocooTest.execute(params, "reads_errs.tab", "reads_bloocoo_corr_errs.tab", "reads_bloocoo_corr_errs_full.tab")
 		#Musket correction
 		elif correction_software == 1:
-			#os.system("../../musket reads.fasta -o reads_corrected.fasta")
-			os.system("../../musket -k " + kmer_size + " " + genome_size + " -maxiter " + nb_kmer_checked + " -p 12 -inorder reads.fasta -o reads_corrected.fasta")
+			os.system("../../musket -k " + kmer_size + " " + genome_size + " -maxiter " + nb_kmer_checked + " -p 12 -inorder " + input_reads_filename + " -o " + output_reads_filename)
 			correction_duration = time.time() - t
 		#Racer correction
 		elif correction_software == 2:
-			os.system("../../racer reads.fasta reads_corrected.fasta " + str(genome_size))
+			os.system("../../racer " + input_reads_filename + " " + output_reads_filename + " " + str(genome_size))
 			correction_duration = time.time() - t
 		#
 		elif correction_software == 3: # bloocoo sans errtab
-			os.system("../../Bloocoo -verbose -db reads.fasta -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
+			os.system("../../Bloocoo -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
 			correction_duration = time.time() - t
 		elif correction_software == 4:
-			pass
+			os.system("../../sga/bin/sga index -a ropebwt -c -v -t 8 " + input_reads_filename)
+			os.system("../../sga/bin/sga correct -t 8 -o " + output_reads_filename + " " + input_reads_filename)
+			correction_duration = time.time() - t
 			
 		#Use generic tests if bloocoo is not used
 		if correction_software != 0:
 			TestReadCorrection.print_params(params)
-			true, fp, tp = GenericTest.execute(params, "reads.fasta", "reads_corrected.fasta", "reads_errs.tab")
+			true, tp, fp = GenericTest.execute(params, input_reads_filename, output_reads_filename, "reads_errs.tab")
 			
 		#Recall
 		predicted = tp + fp
@@ -162,8 +177,8 @@ class TestReadCorrection:
 		TestReadCorrection.remove_file("sorted_reads_errs.tab")
 		TestReadCorrection.remove_file("sorted_reads_bloocoo_corr_errs.tab")
 		TestReadCorrection.remove_file("test_diff_result.temp")
-		#TestReadCorrection.remove_file("reads_bloocoo_corr_errs.tab")
-		#TestReadCorrection.remove_file("reads_errs.tab")
+		TestReadCorrection.remove_file("reads_bloocoo_corr_errs.tab")
+		TestReadCorrection.remove_file("reads_errs.tab")
 		#TestReadCorrection.remove_file("comm.temp")
 		TestReadCorrection.remove_file("tmp.binary")
 		TestReadCorrection.remove_file("tmp.solid")
@@ -176,6 +191,12 @@ class TestReadCorrection:
 		TestReadCorrection.remove_file("FPfull")
 		TestReadCorrection.remove_file("tmp.solid")
 		
+		TestReadCorrection.remove_file("file.metrics")
+		TestReadCorrection.remove_file("reads.bwt")
+		TestReadCorrection.remove_file("reads.ec.fa")
+		TestReadCorrection.remove_file("reads.rbwt")
+		TestReadCorrection.remove_file("reads.rsai")
+		TestReadCorrection.remove_file("reads.sai")
 
 		
 	#-------------------------------------------------------------
@@ -252,14 +273,15 @@ class GenericTest:
 		true = 0
 		tp = 0
 		fp = 0
-		
+		nead_fastq = params["need_fastq"]
 		#---
 		while(True):
 			#print "------------------", read_index
-			err_read = GenericTest.next_read(reads_file)
-			corrected_read = GenericTest.next_read(corrected_reads_file)
-				
+			err_read = GenericTest.next_read(reads_file, nead_fastq)
 			
+			corrected_read = GenericTest.next_read(corrected_reads_file, nead_fastq)
+				
+				
 			if err_read == "":
 				break
 			#print corrected_read
@@ -279,19 +301,30 @@ class GenericTest:
 			read_index += 1
 			#if read_index == 3: break
 			
-		return true, fp, tp
+		return true, tp, fp
 		
 	@staticmethod	
-	def next_read(reads_file):
+	def next_read(reads_file, nead_fastq):
 		#print "-----------------------------------------"
 		read = ""
 		
-		for line in reads_file:
-			#print "lilneLALA:     ", line.strip()
-			if line[0] == ">" and len(read) != 0:
-				break
-			elif line[0] != ">" :
-				read += line.strip()
+		if nead_fastq:
+			in_read = True
+			
+			for line in reads_file:
+				if line[0] == "@" and len(read) != 0:
+					break
+				elif line[0] == "+":
+					in_read = False
+				elif in_read:
+					read += line.strip()
+					
+		else:
+			for line in reads_file:
+				if line[0] == ">" and len(read) != 0:
+					break
+				elif line[0] != ">" :
+					read += line.strip()
 			
 		#print "-----------------------------------------"	
 		return read
