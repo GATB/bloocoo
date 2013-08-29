@@ -1,8 +1,9 @@
  
 import sys, os
 import cPickle, commands, copy, time
-from os.path import exists, basename, splitext, join
+from os.path import exists, basename, splitext, join, isdir
 from itertools import izip
+import shutil
 
 #-------------------------------------------------------------
 # ** TestReadCorrection
@@ -34,16 +35,13 @@ class TestReadCorrection:
 		genome_filename = str(params["genome_filename"])
 		correction_software = int(params["correction_software"])
 		error_rate = str(params["error_rate"])
+		read_format = params["read_format"]
 		
-		#Check if the selected correction software need fastq format 
-		need_fastq = correction_software > 3
-		if need_fastq:
-			fastq_arg = "-fastq"
-			read_format = "fastq"
-		else:
-			fastq_arg = ""
-			read_format = "fasta"
-		params["need_fastq"] = need_fastq
+		#Check if the selected correction software need fastq format
+		#need_fastq_softwares = [4, 5, 6, 8] 
+		#need_fastq = correction_software in need_fastq_softwares
+			
+		#params["need_fastq"] = need_fastq
 		input_reads_filename = "reads." + read_format
 		output_reads_filename = "reads_corrected." + read_format
 		
@@ -52,6 +50,7 @@ class TestReadCorrection:
 			
 		#Correction will fail if this file exists
 		TestReadCorrection.remove_file("reads.fasta.bin")
+		TestReadCorrection.remove_file("./allpath_corr.allpaths-lg")
 		
 		#Mutaread
 		if regenerate_reads:
@@ -60,9 +59,9 @@ class TestReadCorrection:
 				os.system("../../gener_alea " + genome_size + " 1")
 				#Decoupage du genome contenu dans le fichier en multiple reads
 				#Params: file_in, file_out, reads_count, reads_length, error_rate, error_rate, error_rate
-				os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile " + fastq_arg)
+				os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile -" + read_format)
 			else:
-				os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile " + fastq_arg)
+				os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile -" + read_format)
 		
 		#Reads correction
 		t = time.time()
@@ -90,10 +89,48 @@ class TestReadCorrection:
 		elif correction_software == 3: # bloocoo sans errtab
 			os.system("../../Bloocoo -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
 			correction_duration = time.time() - t
-		elif correction_software == 4:
+		#SGA (work with fasta and fastq)
+		elif correction_software == 4: 
 			os.system("../../sga/bin/sga index -a ropebwt -c -v -t 8 " + input_reads_filename)
 			os.system("../../sga/bin/sga correct -t 8 -o " + output_reads_filename + " " + input_reads_filename)
 			correction_duration = time.time() - t
+		#allpath (doesn't work because of an error during process)
+		elif correction_software == 5: 
+			os.system("../../allpath/bin/ErrorCorrectReads.pl UNPAIRED_READS_IN=" + input_reads_filename + " READS_OUT=allpath_corr PHRED_ENCODING=33")
+			correction_duration = time.time() - t
+		#SOAPec (doesn't work because of compile errors)
+		elif correction_software == 6: 
+			os.system("../../SOAPec_v2.0.1/bin/KmerFreq_AR " + input_reads_filename)
+			correction_duration = time.time() - t
+		#HSHREC (doesn't work because of discarded reads)
+		elif correction_software == 7: 
+			os.system("java -cp ../../SHREC/HSHREC/: Shrec -n " + genome_size + " " + input_reads_filename)
+			output_reads_filename = input_reads_filename + ".corrected"
+			correction_duration = time.time() - t
+		#Coral (work with fasta and fastq)
+		elif correction_software == 8: 
+			if read_format == "fastq":
+				os.system("../../coral -illumina -fq " + input_reads_filename + " -o " + output_reads_filename + " -k " + kmer_size)
+			else:
+				os.system("../../coral -illumina -f " + input_reads_filename + " -o " + output_reads_filename + " -k " + kmer_size)
+			correction_duration = time.time() - t
+		#Reptile
+		elif correction_software == 9:
+			params["read_format"] = "fasta"
+			read_format = params["read_format"]
+			output_reads_filename = "reads_corrected." + read_format
+			TestReadCorrection.remove_file("reads_corrected.fastq")
+			TestReadCorrection.remove_file("reads.fasta")
+			if not exists("./reptile"):
+				os.mkdir("./reptile")
+			os.system("../../reptile/fastq-converter-v2.0.pl ./ ./reptile/ 2 12 1 T")
+			os.system("../../reptile/seq-analy ../../reptile/config")
+			os.system("../../reptile/seq-analy ../../reptile/config")
+			os.system("../../reptile/reptile-v1.1 ../../reptile/config")
+			os.system("../../reptile/reptile_merger reptile/reads.fa reptile/reptile-output reads_corrected.fasta")
+			correction_duration = time.time() - t
+			shutil.move("reptile/reads.fa", "reads.fasta")
+			
 			
 		#Use generic tests if bloocoo is not used
 		if correction_software != 0:
@@ -198,6 +235,8 @@ class TestReadCorrection:
 		TestReadCorrection.remove_file("reads.rsai")
 		TestReadCorrection.remove_file("reads.sai")
 
+		TestReadCorrection.remove_file("reads_corrected.allpaths-lg")
+		
 		
 	#-------------------------------------------------------------
 	# * remove_file
@@ -205,7 +244,10 @@ class TestReadCorrection:
 	@staticmethod
 	def remove_file(filename):
 		try:
-			os.remove(filename)
+			if isdir(filename):
+				shutil.rmtree(filename)
+			else:
+				os.remove(filename)
 		except:
 			pass
 			
@@ -273,9 +315,10 @@ class GenericTest:
 		true = 0
 		tp = 0
 		fp = 0
-		nead_fastq = params["need_fastq"]
+		nead_fastq = params["read_format"] == "fastq"
 		#---
 		while(True):
+			#print read_index
 			#print "------------------", read_index
 			err_read = GenericTest.next_read(reads_file, nead_fastq)
 			
@@ -307,16 +350,16 @@ class GenericTest:
 	def next_read(reads_file, nead_fastq):
 		#print "-----------------------------------------"
 		read = ""
-		
 		if nead_fastq:
 			in_read = True
 			
 			for line in reads_file:
+				#print line
 				if line[0] == "@" and len(read) != 0:
 					break
 				elif line[0] == "+":
 					in_read = False
-				elif in_read:
+				elif in_read and line[0] != "@":
 					read += line.strip()
 					
 		else:
@@ -388,6 +431,9 @@ class GenericTest:
 		for error in errors:
 			errors_pos.append(error.pos)
 		#---
+		#print len(corrected_read)
+		#print corrected_read
+		#print err_read
 		for i in range(0, len(corrected_read)):
 			if (err_read[i] != corrected_read[i]):
 				if not (i in errors_pos):
