@@ -1,0 +1,2 @@
+err	read_cover	bloom_t	kmer_check	kmer_min	recall	precision	Fscore	gain	time	
+0.01	30	4	8	8	99.84	99.98	99.91	99.82	1216.26799893	
