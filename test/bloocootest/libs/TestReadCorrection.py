@@ -21,7 +21,9 @@ class TestReadCorrection:
 	@staticmethod
 	def main(params):
 		
-
+		bin_prefix = "igrida"
+		bin_path = join("../../", bin_prefix)
+		
 		#Convert params to variable
 		genome_size = str(params["genome_size"])
 		reads_size = str(params["reads_size"])
@@ -56,19 +58,19 @@ class TestReadCorrection:
 		if regenerate_reads:
 			if genome_filename == "":
 				#Generation d'un genome aleatoirement, le genome est contenu dans le fichier alea.seq
-				os.system("../../gener_alea " + genome_size + " 1")
+				os.system(join(bin_path, "gener_alea") + " " + genome_size + " 1")
 				#Decoupage du genome contenu dans le fichier en multiple reads
-				#Params: file_in, file_out, reads_count, reads_length, error_rate, error_rate, error_rate
-				os.system("../../mutareads alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile -" + read_format)
+				os.system(join(bin_path, "mutareads") + " alea.seq  reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile -" + read_format)
 			else:
-				os.system("../../mutareads " + join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile -" + read_format)
+				os.system(join(bin_path, "mutareads") + " " +  join("../../genomes", genome_filename) + " reads " + reads_count + " " + reads_size + " " + error_rate + " 0 0 -errfile -" + read_format)
 		
 		#Reads correction
 		t = time.time()
 		
+		
 		#Bloocoo correction
 		if correction_software == 0:
-			os.system("../../Bloocoo -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
+			os.system(join(bin_path, "Bloocoo") + " -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
 			correction_duration = time.time() - t
 			#Remove bloocoo temp files
 			TestReadCorrection.remove_file("reads.fasta.bin")
@@ -79,15 +81,15 @@ class TestReadCorrection:
 			true, tp, fp, FP0, FP1, FP2 ,FP3, FP4, TC0, TC1, TC2 ,TC3, TC4 = BloocooTest.execute(params, "reads_errs.tab", "reads_bloocoo_corr_errs.tab", "reads_bloocoo_corr_errs_full.tab")
 		#Musket correction
 		elif correction_software == 1:
-			os.system("../../musket -k " + kmer_size + " " + genome_size + " -maxiter " + nb_kmer_checked + " -p 12 -inorder " + input_reads_filename + " -o " + output_reads_filename)
+			os.system(join(bin_path, "musket") + " -k " + kmer_size + " " + genome_size + " -maxiter " + nb_kmer_checked + " -p 12 -inorder " + input_reads_filename + " -o " + output_reads_filename)
 			correction_duration = time.time() - t
 		#Racer correction
 		elif correction_software == 2:
-			os.system("../../racer " + input_reads_filename + " " + output_reads_filename + " " + str(genome_size))
+			os.system(join(bin_path, "racer") + " " + input_reads_filename + " " + output_reads_filename + " " + str(genome_size))
 			correction_duration = time.time() - t
-		#
-		elif correction_software == 3: # bloocoo sans errtab
-			os.system("../../Bloocoo -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
+		#Bloocoo sans err tab
+		elif correction_software == 3:
+			os.system(join(bin_path, "Bloocoo") + " -verbose -db " + input_reads_filename + " -kmer-size " + kmer_size + " -nks " + bloom_threshold + " -nbmin-valid " + min_nb_kmer_checked + " -nkmer-checked " + nb_kmer_checked)
 			correction_duration = time.time() - t
 		#SGA (work with fasta and fastq)
 		elif correction_software == 4: 
@@ -98,39 +100,56 @@ class TestReadCorrection:
 		elif correction_software == 5: 
 			os.system("../../allpath/bin/ErrorCorrectReads.pl UNPAIRED_READS_IN=" + input_reads_filename + " READS_OUT=allpath_corr PHRED_ENCODING=33")
 			correction_duration = time.time() - t
-		#SOAPec (doesn't work because of compile errors)
+		#SOAPec (only compile on cluster, work with fasta and fastq) 
+		#Only work with 1 thread, -c is the max changed in reads, -a 1 means no trim, 
 		elif correction_software == 6: 
-			os.system("../../SOAPec_v2.0.1/bin/KmerFreq_AR " + input_reads_filename)
+			TestReadCorrection.remove_file("read.lst")
+			f = open('read.lst', 'w')
+			f.write(input_reads_filename)
+			f.close() 
+			os.system(join(join(bin_path, "SOAPec"), "KmerFreq_HA") + " -k " + kmer_size + " -l read.lst")
+			if read_format == "fasta": output_format = "2"
+			else: output_format = "3"
+			os.system(join(join(bin_path, "SOAPec"), "Corrector_HA") + " -a 1 -c 5 -o " + output_format + " -k " + kmer_size +  " output.freq.gz read.lst")
 			correction_duration = time.time() - t
-		#HSHREC (doesn't work because of discarded reads)
-		elif correction_software == 7: 
-			os.system("java -cp ../../SHREC/HSHREC/: Shrec -n " + genome_size + " " + input_reads_filename)
-			output_reads_filename = input_reads_filename + ".corrected"
-			correction_duration = time.time() - t
+			try:
+				os.rename(input_reads_filename + ".cor.single.fq", output_reads_filename)
+			except: pass
+			try:
+				os.rename(input_reads_filename + ".cor.single.fa", output_reads_filename)
+			except: pass
+		#HSHREC (doesn't work because of discarded reads file)
+		#elif correction_software == 7: 
+		#	os.system("java -cp ../../SHREC/HSHREC/: Shrec -n " + genome_size + " " + input_reads_filename)
+		#	output_reads_filename = input_reads_filename + ".corrected"
+		#	correction_duration = time.time() - t
 		#Coral (work with fasta and fastq)
+		# -illumina prevent gaps in reads
 		elif correction_software == 8: 
 			if read_format == "fastq":
-				os.system("../../coral -illumina -fq " + input_reads_filename + " -o " + output_reads_filename + " -k " + kmer_size)
+				os.system(join(bin_path, "coral") + " -p 2 -illumina -fq " + input_reads_filename + " -o " + output_reads_filename + " -k " + kmer_size)
 			else:
-				os.system("../../coral -illumina -f " + input_reads_filename + " -o " + output_reads_filename + " -k " + kmer_size)
+				os.system(join(bin_path, "coral") + " -p 2 illumina -f " + input_reads_filename + " -o " + output_reads_filename + " -k " + kmer_size)
 			correction_duration = time.time() - t
-		#Reptile
-		elif correction_software == 9:
-			params["read_format"] = "fasta"
-			read_format = params["read_format"]
-			output_reads_filename = "reads_corrected." + read_format
-			TestReadCorrection.remove_file("reads_corrected.fastq")
-			TestReadCorrection.remove_file("reads.fasta")
-			if not exists("./reptile"):
-				os.mkdir("./reptile")
-			os.system("../../reptile/fastq-converter-v2.0.pl ./ ./reptile/ 2 12 1 T")
-			os.system("../../reptile/seq-analy ../../reptile/config")
-			os.system("../../reptile/seq-analy ../../reptile/config")
-			os.system("../../reptile/reptile-v1.1 ../../reptile/config")
-			os.system("../../reptile/reptile_merger reptile/reads.fa reptile/reptile-output reads_corrected.fasta")
-			correction_duration = time.time() - t
-			shutil.move("reptile/reads.fa", "reads.fasta")
-			
+		#Reptile (Doesn't work because configurations are too complex)
+		#elif correction_software == 9:
+		#	params["read_format"] = "fasta"
+		#	read_format = params["read_format"]
+		#	output_reads_filename = "reads_corrected." + read_format
+		#	TestReadCorrection.remove_file("reads_corrected.fastq")
+		#	TestReadCorrection.remove_file("reads.fasta")
+		#	if not exists("./reptile"):
+		#		os.mkdir("./reptile")
+		#	os.system("../../reptile/fastq-converter-v2.0.pl ./ ./reptile/ 2 12 1 T")
+		#	os.system("../../reptile/seq-analy ../../reptile/config")
+		#	#os.system("../../reptile/seq-analy ../../reptile/config")
+		#	os.system("../../reptile/reptile-v1.1 ../../reptile/config")
+		#	os.system("../../reptile/reptile_merger reptile/reads.fa reptile/reptile-output reads_corrected.fasta")
+		#	correction_duration = time.time() - t
+		#	shutil.move("reptile/reads.fa", "reads.fasta")
+		#Quake
+		elif correction_software == 10:
+			os.system(join(bin_path, "quake") + "/bin/quake.py -p 2 -r " + input_reads_filename + " -k " + kmer_size)
 			
 		#Use generic tests if bloocoo is not used
 		if correction_software != 0:
@@ -191,7 +210,7 @@ class TestReadCorrection:
 			tab_column_names = ["err", "read_cover", "bloom_t", "kmer_check", "kmer_min", "recall", "precision", "Fscore", "gain", "time"]
 			for column_name in tab_column_names:
 				tab_file.write(column_name + "\t")
-				formatted_tab_file.write(("{:<16}").format(column_name))
+				#formatted_tab_file.write(("{:<16}").format(column_name))
 			tab_file.write("\n")
 			formatted_tab_file.write("\n")
 		#Tab file exists so we open them at the end of the file
@@ -204,7 +223,7 @@ class TestReadCorrection:
 		
 		for value in tab_column_values:
 			tab_file.write(str(value) + "\t")
-			formatted_tab_file.write(("{:<16}").format(str(value)))
+			#formatted_tab_file.write(("{:<16}").format(str(value)))
 		tab_file.write("\n")
 		formatted_tab_file.write("\n")
 		
@@ -401,14 +420,6 @@ class GenericTest:
 		#if last_pos:
 		err_tab_file.seek(last_pos)
 		return errors
-		"""
-		errors = []
-		for i in range(0, len(noerr_read)):
-			if noerr_read[i] != err_read[i]:
-				error = ReadError(i, noerr_read[i], err_read[i])
-				errors.append(error)
-		return errors
-		"""
 
 	#-------------------------------------------------------------
 	# * check_true_correction

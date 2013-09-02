@@ -1,0 +1,20 @@
+Label_1 num_raw_reads: 3000
+Label_2 num_raw_bases: 300000
+Label_3 num_result_reads: 3000
+Label_4 num_result_bases: 300000
+
+Label_5 num_trimmed_reads: 0
+Label_6 num_trimmed_bases: 0
+Label_7 num_deleted_reads: 0
+
+Label_8 num_corrected_bases_by_Fast_method: 963
+Label_9 num_corrected_bases_by_BBtree_method: 1361
+Label_10 num_corrected_bases_by_two_methods: 2324
+
+Label_11 low_quality_bases_filter_ratio: 0
+Label_12 estimated_raw_base_error_ratio: 0.00774667
+
+***** Below table use for QC output *****
+
+Label_1	Label_2	Label_3	Label_4	Label_5	Label_6	Label_7	Label_11	Label_12
+3000	300000	3000	300000	0	0	0	0	0.00774667
