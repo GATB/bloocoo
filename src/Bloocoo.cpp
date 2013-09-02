@@ -396,6 +396,7 @@ public:
 
         _tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
       //  printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
+        _nb_less_restrictive_correction = 3;
 
     }
 
@@ -470,7 +471,7 @@ public:
         _thread_id = __sync_fetch_and_add (_nb_living, 1);
        // printf("------- CorrectReads copy construct  from  %p  into %p --------- tid %i \n",&cr,this,_thread_id);
 
-		_nb_less_restrictive_correction = 1;
+		_nb_less_restrictive_correction = cr._nb_less_restrictive_correction;
 		
     }
     //assign
@@ -531,7 +532,7 @@ void Bloocoo::execute ()
     _nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
     _nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
     _max_multimutation_distance = 6;
-    _only_decrease_nb_min_valid = false;
+    _only_decrease_nb_min_valid = false; // false = descend les 2, recall plus faible
     
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
