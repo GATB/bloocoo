@@ -5,62 +5,14 @@
  *   Copyright (c) INRIA, CeCILL license, 2013                               *
  *****************************************************************************/
 
-#include <gatb/system/impl/System.hpp>
-
-#include <gatb/bank/impl/Bank.hpp>
-#include <gatb/bank/impl/BankBinary.hpp>
-#include <gatb/bank/impl/BankHelpers.hpp>
-
-#include <gatb/kmer/impl/Model.hpp>
-#include <gatb/kmer/impl/BloomBuilder.hpp>
-
-#include <gatb/tools/designpattern/impl/IteratorHelpers.hpp>
-#include <gatb/tools/designpattern/impl/Command.hpp>
-
-#include <gatb/tools/collections/impl/BagFile.hpp>
-#include <gatb/tools/collections/impl/BagCache.hpp>
-#include <gatb/tools/collections/impl/IteratorFile.hpp>
-
-#include <gatb/tools/misc/impl/Progress.hpp>
-#include <gatb/tools/misc/impl/Property.hpp>
-#include <gatb/tools/misc/impl/TimeInfo.hpp>
-
-#include <iostream>
-#include <map>
-#include <math.h>
-
-#include <gatb/tools/math/Integer.hpp>
+#include <Bloocoo.hpp>
 
 #include <libgen.h>
 
-#include <Bloocoo.hpp>
-#include <DSK.hpp>
 #include "ReadWriter.h"
-
-
 
 // We use the required packages
 using namespace std;
-
-using namespace gatb::core::system;
-using namespace gatb::core::system::impl;
-
-using namespace gatb::core::bank;
-using namespace gatb::core::bank::impl;
-
-using namespace gatb::core::kmer;
-using namespace gatb::core::kmer::impl;
-
-using namespace gatb::core::tools::dp;
-using namespace gatb::core::tools::dp::impl;
-
-using namespace gatb::core::tools::misc;
-using namespace gatb::core::tools::misc::impl;
-
-using namespace gatb::core::tools::collections;
-using namespace gatb::core::tools::collections::impl;
-
-using namespace gatb::core::tools::math;
 
 #define DEBUG(a)  printf a
 
@@ -503,14 +455,14 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
 
 		}
 	}
-#if ERR_TAB
+#ifdef ERR_TAB
     pthread_mutex_init(&errtab_mutex, NULL);
 #endif
     /** We add options specific to this tool. */
-    getParser()->add (new OptionOneParam (DSK::STR_KMER_SIZE,               "size of a kmer",   true));
-    getParser()->add (new OptionOneParam (DSK::STR_URI_DATABASE,            "database",         true));   // not useful ?
-    getParser()->add (new OptionOneParam (DSK::STR_URI_SOLID_KMERS,         "solid kmers file", false));
-    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,    "min number of kmers to valid a correction", false,"2"));
+    getParser()->add (new OptionOneParam (STR_KMER_SIZE,                    "size of a kmer",   true));
+    getParser()->add (new OptionOneParam (STR_URI_DB,                       "database",         true));   // not useful ?
+    getParser()->add (new OptionOneParam (STR_KMER_SOLID,                   "solid kmers file", false));
+    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"2"));
     getParser()->add (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"2"));
 }
 
@@ -527,8 +479,8 @@ void Bloocoo::execute ()
     /*************************************************/
     // We set some attributes (shortcuts).
     /*************************************************/
-    _kmerSize           = getInput()->getInt (DSK::STR_KMER_SIZE);
-    _solidFile          = getInput()->getStr (DSK::STR_URI_SOLID_KMERS);
+    _kmerSize           = getInput()->getInt (STR_KMER_SIZE);
+    _solidFile          = getInput()->getStr (STR_KMER_SOLID);
     _nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
     _nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
     _max_multimutation_distance = 6;
@@ -541,7 +493,7 @@ void Bloocoo::execute ()
     LOCAL (_bloom);
 
     //iterate over initial file
-    Bank inbank (getInput()->getStr(DSK::STR_URI_DATABASE));
+    Bank inbank (getInput()->getStr(STR_URI_DB));
 
     /*************************************************/
     // We create a sequence iterator for the bank
@@ -558,7 +510,7 @@ void Bloocoo::execute ()
     /*************************************************/
 
     /** We get the basename from the provided URI (ie remove directory path and suffix). */
-    string prefix = System::file().getBaseName (getInput()->getStr(DSK::STR_URI_DATABASE));
+    string prefix = System::file().getBaseName (getInput()->getStr(STR_URI_DB));
 
     /** We set the filename as the base name + a specific suffix. */
     string fileName = prefix + string("_corrected.fasta");
@@ -570,7 +522,7 @@ void Bloocoo::execute ()
     u_int64_t total_nb_errors_corrected = 0;
     int nb_corrector_threads_living;
     
-#if ERR_TAB
+#ifdef ERR_TAB
     //file with list of errors, for testing purposes
     string ferrfile = prefix + string ("_bloocoo_corr_errs.tab");
 
@@ -600,9 +552,9 @@ void Bloocoo::execute ()
         nb_corrector_threads_living = 0 ;
         
 #ifdef SERIAL
-        setDispatcher (new SerialCommandDispatcher());
+        setDispatcher (new SerialDispatcher());
 #else
-        setDispatcher (  new ParallelCommandDispatcher (getInput()->getInt(STR_NB_CORES)) );
+        setDispatcher (  new ParallelDispatcher (getInput()->getInt(STR_NB_CORES)) );
 #endif
         
         
@@ -650,16 +602,16 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     if (estimatedBloomSize ==0 ) { estimatedBloomSize = 1000; }
 
     /** We create the kmers iterator from the solid file. */
-    Iterator<kmer_type>* itKmers = createIterator<kmer_type> (
-        new IteratorFile<kmer_type> (_solidFile),
+    Iterator<Kmer<kmer_type> >* itKmers = createIterator<Kmer<kmer_type> > (
+        new IteratorFile<Kmer<kmer_type> > (_solidFile),
         solidFileSize,
         "fill bloom filter"
     );
     LOCAL (itKmers);
 
     /** We instantiate the bloom object. */    
-    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(Tool::STR_NB_CORES));
-    Bloom<kmer_type>* bloom = builder.build ();
+    BloomBuilder<kmer_type> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(STR_NB_CORES));
+    Bloom<kmer_type>* bloom = builder.build (itKmers);
 
     /** We return the created bloom filter. */
     return bloom;
@@ -1276,7 +1228,7 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt,int algo, Sequ
 	}
 	//printf("\t\t%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
 	
-#if ERR_TAB
+#ifdef ERR_TAB
     pthread_mutex_lock(&errtab_mutex);
 
     _errfile->print("%i\t%i\t%c\t%c\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos]);
@@ -1475,34 +1427,6 @@ bool Bloocoo::is_pos_correctable(int pos, char* readseq,std::vector<int>& tab_co
 	bool is_pos_corrected = (std::find(tab_corrected_pos.begin(), tab_corrected_pos.end(), pos) != tab_corrected_pos.end());
 	return !N_at_pos && !is_pos_corrected;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*********************************************************************
 ** METHOD  :
