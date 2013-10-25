@@ -10,17 +10,7 @@
 
 /********************************************************************************/
 
-#include <gatb/tools/misc/impl/Tool.hpp>
-
-#include <gatb/tools/math/Integer.hpp>
-#include <gatb/tools/designpattern/impl/IteratorHelpers.hpp>
-#include <gatb/tools/designpattern/impl/Command.hpp>
-#include <gatb/tools/misc/impl/TimeInfo.hpp>
-#include <gatb/tools/misc/impl/OptionsParser.hpp>
-#include <gatb/bank/impl/Bank.hpp>
-#include <gatb/bank/impl/BankBinary.hpp>
-#include <gatb/kmer/impl/Model.hpp>
-#include <gatb/tools/collections/impl/Bloom.hpp>
+#include <gatb/gatb_core.hpp>
 
 #include <string>
 #include <sstream>
@@ -45,6 +35,9 @@ using namespace gatb::core::system::impl;
  insert that in a bloom filter, and correct read form it*/
 /********************************************************************************/
 
+typedef tools::math::LargeInt<1> kmer_type;
+typedef kmer::impl::Model<kmer_type> KmerModel;
+
 class Bloocoo : public misc::impl::Tool
 {
 //private:
@@ -66,7 +59,7 @@ public:
 	};
 	
 	
-#if ERR_TAB
+#ifdef ERR_TAB
     pthread_mutex_t errtab_mutex;
 #endif
     
