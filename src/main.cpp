@@ -5,16 +5,11 @@
  *   Copyright (c) INRIA, CeCILL license, 2013                               *
  *****************************************************************************/
 
-#include <BankConverter.hpp>
-#include <DSK.hpp>
-#include <Bloocoo.hpp>
-#include <gatb/system/impl/System.hpp>
-#include <gatb/tools/misc/impl/Property.hpp>
-#include <gatb/tools/misc/impl/Tool.hpp>
-
 /********************************************************************************/
 
-using namespace gatb::core::tools;
+#include <Bloocoo.hpp>
+#include <DSK.hpp>
+
 using namespace std;
 
 /********************************************************************************/
@@ -26,7 +21,6 @@ int main (int argc, char* argv[])
     {
         misc::impl::ToolComposite tool;
 
-        tool.add (new BankConverter ());
         tool.add (new DSK           ());
         tool.add (new Bloocoo       ());
 
