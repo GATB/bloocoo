@@ -59,7 +59,7 @@ const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
 /********************************************************************************/
 //functor for read correction this is the code to correct a single read
 /********************************************************************************/
-class CorrectReads : public IteratorFunctor
+class CorrectReads
 {
 public:
     void operator() ( Sequence& current_seq) //no const otherwise error with tKmer.setData
@@ -341,7 +341,7 @@ public:
     CorrectReads (Bloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, int nb_cores, int * nbliving)
         : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
           _total_nb_errors_corrected (nb_errors_corrected), _local_nb_errors_corrected(0),
-          _synchro(this->newSynchro()),_temp_nb_seq_done(0), _nb_living(nbliving)
+          _synchro(System::thread().newSynchronizer()),_temp_nb_seq_done(0), _nb_living(nbliving)
     {
         _bankwriter = new OrderedBankWriter(outbank,nb_cores*10000);
         _thread_id = __sync_fetch_and_add (_nb_living, 1);
@@ -554,7 +554,7 @@ void Bloocoo::execute ()
 #ifdef SERIAL
         setDispatcher (new SerialDispatcher());
 #else
-        setDispatcher (  new ParallelDispatcher (getInput()->getInt(STR_NB_CORES)) );
+        setDispatcher (  new Dispatcher (getInput()->getInt(STR_NB_CORES)) );
 #endif
         
         
