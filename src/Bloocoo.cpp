@@ -90,7 +90,7 @@ public:
         int readlen = current_seq.getDataSize();
         
         int nb_checked;
-        KmerModel model (sizeKmer);
+        KmerModel model (sizeKmer,KMER_DIRECT);
         KmerModel::Iterator itKmer (model);
 		kmer_type current_kmer;
 		kmer_type current_kmer_min;
@@ -116,7 +116,7 @@ public:
 				first_gap = true;
 				ii = 0;
 				
-				itKmer.setData (current_seq.getData(),KMER_DIRECT);
+				itKmer.setData (current_seq.getData());
 				
 				int untrusted_zone_size = 0;
 				int trusted_zone_size = 0;
@@ -459,11 +459,11 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
     pthread_mutex_init(&errtab_mutex, NULL);
 #endif
     /** We add options specific to this tool. */
-    getParser()->add (new OptionOneParam (STR_KMER_SIZE,                    "size of a kmer",   true));
-    getParser()->add (new OptionOneParam (STR_URI_DB,                       "database",         true));   // not useful ?
-    getParser()->add (new OptionOneParam (STR_KMER_SOLID,                   "solid kmers file", false));
-    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"2"));
-    getParser()->add (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"2"));
+    getParser()->push_back (new OptionOneParam (STR_KMER_SIZE,                    "size of a kmer",   true));
+    getParser()->push_back (new OptionOneParam (STR_URI_DB,                       "database",         true));   // not useful ?
+    getParser()->push_back (new OptionOneParam (STR_KMER_SOLID,                   "solid kmers file", false));
+    getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"2"));
+    getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"2"));
 }
 
 /*********************************************************************
@@ -493,7 +493,7 @@ void Bloocoo::execute ()
     LOCAL (_bloom);
 
     //iterate over initial file
-    Bank inbank (getInput()->getStr(STR_URI_DB));
+    BankFasta inbank (getInput()->getStr(STR_URI_DB));
 
     /*************************************************/
     // We create a sequence iterator for the bank
@@ -515,7 +515,7 @@ void Bloocoo::execute ()
     /** We set the filename as the base name + a specific suffix. */
     string fileName = prefix + string("_corrected.fasta");
 
-    Bank outbank (fileName);
+    BankFasta outbank (fileName);
 
     BagCache<Sequence> *  outbank_cache = new BagCache<Sequence> (&outbank,10000);
     
@@ -602,15 +602,15 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     if (estimatedBloomSize ==0 ) { estimatedBloomSize = 1000; }
 
     /** We create the kmers iterator from the solid file. */
-    Iterator<Kmer<kmer_type> >* itKmers = createIterator<Kmer<kmer_type> > (
-        new IteratorFile<Kmer<kmer_type> > (_solidFile),
+    Iterator<kmer_count>* itKmers = createIterator<kmer_count> (
+        new IteratorFile<kmer_count> (_solidFile),
         solidFileSize,
         "fill bloom filter"
     );
     LOCAL (itKmers);
 
     /** We instantiate the bloom object. */    
-    BloomBuilder<kmer_type> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(STR_NB_CORES));
+    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build (itKmers);
 
     /** We return the created bloom filter. */
@@ -1252,11 +1252,11 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt,int algo, Sequ
 *********************************************************************/
 void Bloocoo::codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction){
 	if(direction == RIGHT){
-		*kmer = model->codeSeedRight(*kmer, nt, Data::INTEGER, KMER_DIRECT);
+		*kmer = model->codeSeedRight(*kmer, nt, Data::INTEGER);
 	}
 	else{
 		kmer_type kmer_end_rev = revcomp(*kmer, _kmerSize);
-		*kmer = model->codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER, KMER_DIRECT);
+		*kmer = model->codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER);
 		*kmer = revcomp(*kmer, _kmerSize);
 	}
 }
@@ -1326,7 +1326,7 @@ void Bloocoo::print_read_correction_state(KmerModel* model, Sequence& s){
 	KmerModel::Iterator itKmer2 (*model);
 	kmer_type kmer, kmer_min;
 	
-	itKmer2.setData (s.getData(),KMER_DIRECT);
+	itKmer2.setData (s.getData());
 	int i3=0;
 	//printf("\nread correction state (%i):\n", seq_num);
 	//printf("\t%s\n", s.getDataBuffer());
@@ -1370,7 +1370,7 @@ void Bloocoo::print_read_if_not_fully_corrected(KmerModel* model, Sequence& s){
 	KmerModel::Iterator itKmer2 (*model);
 	kmer_type kmer, kmer_min;
 	
-	itKmer2.setData (s.getData(),KMER_DIRECT);
+	itKmer2.setData (s.getData());
 	int i3=0;
 	//printf("\nread correction state (%i):\n", _seq_num);
 	//printf("\t%s\n", s.getDataBuffer());

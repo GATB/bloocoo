@@ -35,8 +35,9 @@ using namespace gatb::core::system::impl;
  insert that in a bloom filter, and correct read form it*/
 /********************************************************************************/
 
-typedef tools::math::LargeInt<1> kmer_type;
-typedef kmer::impl::Model<kmer_type> KmerModel;
+typedef kmer::impl::Kmer<>::Model KmerModel;
+typedef kmer::impl::Kmer<>::Type  kmer_type;
+typedef kmer::impl::Kmer<>::Count kmer_count;
 
 class Bloocoo : public misc::impl::Tool
 {

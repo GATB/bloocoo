@@ -17,8 +17,7 @@
 #include <gatb/tools/designpattern/impl/Command.hpp>
 #include <gatb/tools/misc/impl/TimeInfo.hpp>
 #include <gatb/tools/misc/impl/OptionsParser.hpp>
-#include <gatb/bank/impl/Bank.hpp>
-#include <gatb/bank/impl/BankBinary.hpp>
+#include <gatb/bank/impl/Banks.hpp>
 #include <gatb/kmer/impl/Model.hpp>
 #include <gatb/tools/collections/impl/Bloom.hpp>
 #include <gatb/tools/collections/impl/BagFile.hpp>
