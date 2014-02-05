@@ -28,7 +28,7 @@
 
 #define TAB_MULTIVOTE_SIZE (16*16*128)
 
-#define ERR_TAB 0 // only in single thread mode
+//#define ERR_TAB  // only in single thread mode
 
 /********************************************************************************/
 
@@ -49,6 +49,7 @@ using namespace gatb::core::system::impl;
 typedef kmer::impl::Kmer<>::Model KmerModel;
 typedef kmer::impl::Kmer<>::Type  kmer_type;
 typedef kmer::impl::Kmer<>::Count kmer_count;
+
 
 class Bloocoo : public misc::impl::Tool
 {
@@ -84,6 +85,7 @@ public:
     
     IBank* _inputBank;
 
+    static const char* STR_ION;
     static const char* STR_NB_MIN_VALID;
     static const char* STR_NB_VALIDATED_KMERS;
     
@@ -91,7 +93,8 @@ public:
     IFile*      _errfile_full;
     IFile*      _debug;
 
-	
+	bool _ion_mode;
+    
 	std::string __badReadStack; //Variable de debug qui contient l'empreinte de la correction des reads
 	int __correction_methods_successes[NB_CORRECTION_METHODS]; //Variable de debug pour afficher l'efficacité des méthodes de correction
 	int __correction_methods_calls[NB_CORRECTION_METHODS]; //Variable de debug pour afficher le nb d'appels
