@@ -321,6 +321,7 @@ public:
                                             current_seq.getData().setSize(readlen-ins_size);
                                             _local_nb_ins_corrected += ins_size;
 #ifdef DEBION
+                                            printf("mm %i %i  %i\n",+insert_pos + 1 - ins_size ,  + insert_pos + 1, readlen-(insert_pos)-1);
 
                                             printf("apply correc insert len %i pos %i \n",ins_size,insert_pos);
 #endif
@@ -362,11 +363,12 @@ public:
                                         
                                         if (_bloom->contains(min(revcomp(corrected_kmer, sizeKmer), corrected_kmer)))
                                         {
-                                            memmove(readseq+dele_pos+del_size,readseq+dele_pos,readlen-dele_pos-1);
+                                            memmove(readseq+dele_pos+del_size,readseq+dele_pos,readlen-dele_pos-del_size);
                                             continue_correction = true;
                                             current_seq.getData().setSize(readlen);
                                             _local_nb_del_corrected += del_size;
 #ifdef DEBION
+                                            printf("mm %i %i  %i\n",dele_pos+del_size ,  + dele_pos, readlen-dele_pos-del_size);
 
                                             printf("apply correc del len %i pos %i \n",del_size,dele_pos);
 #endif
@@ -492,7 +494,7 @@ public:
                                 int insert_pos = ii+sizeKmer-1;
                                 int delete_pos = ii+sizeKmer-2;
 
-                                if(pos_homopo==1 &&  insert_pos >  (readlen-sizeKmer) && insert_pos < readlen-5)
+                                if(pos_homopo==1 &&  insert_pos >  (readlen-sizeKmer) ) //&& insert_pos < readlen-5
                                 {
                                    //   printf("insert F  %i lenm %i rl %i\n",insert_pos,readlen-(insert_pos)-1,readlen);
 
@@ -522,11 +524,13 @@ public:
                                 
                                 if(pos_homopo==2 &&  delete_pos >  (readlen-sizeKmer) && delete_pos < readlen-5) //ne gere pas la toute fin
                                 {
+
 #ifdef DEBION
                                     printf("dele  F  %i lenm %i  rl %i\n",delete_pos,readlen-delete_pos-1,readlen);
 #endif
-                                    int del_size = 1;
                                     
+                                    int del_size = 1;
+
                                     for(del_size = 1; del_size<=3;del_size ++ )
                                     {
                                         corrected_kmer = wrong_kmer;
@@ -548,10 +552,10 @@ public:
 #ifdef DEBION
 
                                             printf("apply coorec dele F  len %i pos %i\n",del_size,delete_pos);
-                                            printf("%i %i %i\n",+delete_pos+del_size,delete_pos,readlen-delete_pos-1);
-                                            printf("old read\n%s\n",readseq);
+                                            printf("%i %i %i\n",+delete_pos+del_size,delete_pos,readlen-delete_pos-del_size);
+                                            printf("old read\n%.*s\n",readlen,readseq);
 #endif
-                                            memmove(readseq+delete_pos+del_size,readseq+delete_pos,readlen-delete_pos-1);
+                                            memmove(readseq+delete_pos+del_size,readseq+delete_pos,readlen-delete_pos-del_size);
                                             for(int hh=0; hh<del_size; hh++)
                                             {
                                                 readseq[delete_pos+1+hh]= readseq[delete_pos] ;
@@ -561,7 +565,7 @@ public:
                                             }
 #ifdef DEBION
 
-                                            printf("new read\n%s\n",readseq);
+                                            printf("new read %.*s\n",readlen,readseq);
 #endif
                                             continue_correction = true;
                                             current_seq.getData().setSize(readlen);
