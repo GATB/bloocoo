@@ -251,7 +251,9 @@ public:
 				
 				//Mettre en dehors du while dans une version final (attention dangereux), faire gaffe a ne jamais utiliser un kmer de ce tableau
 				//avec un indice > ii
-				kmer_type* kmers[readlen-sizeKmer+1];
+                int ks = readlen-sizeKmer+1;
+                if (ks <= 0) ks =10;
+				kmer_type* kmers[ks]; // there was a bug with [readlen-sizeKmer+1], array should always be init with >0 size
                 
                 
 				if(PRINT_DEBUG){ _bloocoo->print_read_correction_state(&model, current_seq);}
@@ -294,7 +296,10 @@ public:
                             //todo put this in outside func
                             if(_bloocoo->_ion_mode)
                             {
-                                if(pos_homopo==1)
+                                int insert_pos =ii-2;
+                                int dele_pos= ii-1;
+
+                                if(pos_homopo==1 && insert_pos >=5) // todo :le prob des bouts
                                 {
                                     
                                     kmer_type corrected_kmer = last_wrong_kmer;
@@ -302,7 +307,6 @@ public:
                                     #ifdef DEBION
                                     printf("insert M %i lenm %i rl %i\n",ii-2,readlen-(ii-2)-1,readlen);
 #endif
-                                    int insert_pos =ii-2;
                                    // std::cout << " last wrong kmer    " << last_wrong_kmer.toString(sizeKmer) << std::endl;
                                     //il faut rtempalcer premiere nt par celle davant
                                     
@@ -312,10 +316,14 @@ public:
                                     {
                                         corrected_kmer = last_wrong_kmer;
                                         _bloocoo->mutate_kmer(&corrected_kmer, sizeKmer-1, NT2int(readseq[ii-2-ins_size]));
+                                     //   if((ii-2-ins_size)>=current_seq.getDataSize()  || (ii-2-ins_size) < 0 )
+                                      //      printf("PB %i %i %i get %i   kk %i \n",insert_pos,ins_size,readlen,current_seq.getDataSize(),ii-2-ins_size);
+                                        
                                     //    std::cout << "try corrected kmer    " << corrected_kmer.toString(sizeKmer)  <<" ins size" << ins_size << std::endl;
 
                                         if (_bloom->contains(min(revcomp(corrected_kmer, sizeKmer), corrected_kmer)))
                                         {
+
                                             memmove(readseq+insert_pos + 1 - ins_size , readseq + insert_pos + 1, readlen-(insert_pos)-1);
                                             continue_correction = true;
                                             current_seq.getData().setSize(readlen-ins_size);
@@ -333,11 +341,10 @@ public:
 
 
                                 }
-                                else if (pos_homopo==2)
+                                else if (pos_homopo==2 && dele_pos >=5) // todo :le prob des bouts
                                 {
                                     kmer_type corrected_kmer = last_wrong_kmer;
 
-                                    int dele_pos= ii-1;
                                  //   printf("possible deletion in read  at pos %i  len %i  readlen %i \n",ii-1,readlen-(ii-1)-1,readlen);
 #ifdef DEBION
 
@@ -522,7 +529,7 @@ public:
 
                                 }
                                 
-                                if(pos_homopo==2 &&  delete_pos >  (readlen-sizeKmer) && delete_pos < readlen-5) //ne gere pas la toute fin
+                                if(pos_homopo==2 &&  delete_pos >  (readlen-sizeKmer) && delete_pos < readlen-5) //ne gere pas la toute fin // todo :le prob des bouts
                                 {
 
 #ifdef DEBION
