@@ -3,7 +3,7 @@
 
 echo -n "Testing two close errors"
 
-../build/Bloocoo -db datatest/errclose.fasta -kmer-size 31 -nks 5
+../build/Bloocoo -file datatest/errclose.fasta -kmer-size 31 -nks 5 -err-tab &> /dev/null
 
 
 diff errclose_bloocoo_corr_errs.tab ./datatest/true_res_test4 > /dev/null
@@ -18,7 +18,7 @@ echo  FAILED
 exit 1
 fi
 
-rm errclose_bloocoo_corr_errs.tab errclose_corrected.fasta
+rm errclose_bloocoo_corr_errs.tab errclose_corrected.fasta  
 
 
 
