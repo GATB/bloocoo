@@ -17,6 +17,7 @@
  *****************************************************************************/
 
 #include <Bloocoo.hpp>
+#include <DSK.hpp>
 
 #include <libgen.h>
 
@@ -31,11 +32,10 @@ using namespace std;
 /********************************************************************************/
 // We define some string constants.
 /********************************************************************************/
-const char* Bloocoo::STR_NB_MIN_VALID         = "-nbmin-valid";
-const char* Bloocoo::STR_ION         = "-ion";
-
-const char* Bloocoo::STR_NB_VALIDATED_KMERS         = "-nkmer-checked";
-
+const char* Bloocoo::STR_NB_MIN_VALID       = "-nbmin-valid";
+const char* Bloocoo::STR_ION                = "-ion";
+const char* Bloocoo::STR_NB_VALIDATED_KMERS = "-nkmer-checked";
+const char* Bloocoo::STR_ERR_TAB            = "-err-tab";
 
 // these 2 tabs are now known globally
 //char bin2NT[4] = {'A','C','T','G'};
@@ -880,7 +880,7 @@ public:
  ** RETURN  :
  ** REMARKS :
  *********************************************************************/
-Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
+Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mutex(0)
 {
     // _seq_num = 0;
     
@@ -891,17 +891,30 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0)
             
 		}
 	}
-#ifdef ERR_TAB
-    pthread_mutex_init(&errtab_mutex, NULL);
-#endif
+
+    /** We get an OptionsParser for DSK. */
+    OptionsParser parserDSK = DSK::getOptionsParser();
+    getParser()->add (parserDSK);
+
     /** We add options specific to this tool. */
-    getParser()->push_back (new OptionOneParam (STR_KMER_SIZE,                    "size of a kmer",   true));
-    getParser()->push_back (new OptionOneParam (STR_URI_DB,                       "database",         true));   // not useful ?
-    getParser()->push_back (new OptionOneParam (STR_KMER_SOLID,                   "solid kmers file", false));
     getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"3"));
     getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"4"));
-    getParser()->push_back (new OptionNoParam (Bloocoo::STR_ION,        "ion correction mode", false));
-    
+    getParser()->push_back (new OptionNoParam (Bloocoo::STR_ION,                  "ion correction mode", false));
+    getParser()->push_back (new OptionNoParam (Bloocoo::STR_ERR_TAB,              "generate error tabs", false));
+}
+
+/*********************************************************************
+ ** METHOD  :
+ ** PURPOSE :
+ ** INPUT   :
+ ** OUTPUT  :
+ ** RETURN  :
+ ** REMARKS :
+ *********************************************************************/
+Bloocoo::~Bloocoo ()
+{
+    /** Cleanup. */
+    if (errtab_mutex != 0)  { delete errtab_mutex; }
 }
 
 /*********************************************************************
@@ -931,9 +944,9 @@ void Bloocoo::execute ()
     LOCAL (_bloom);
     
     //iterate over initial file
-    BankFasta inbank (getInput()->getStr(STR_URI_DB));
+    BankFasta inbank (getInput()->getStr(STR_URI_FILE));
     
-    std::cout <<  getInput()->getStr(STR_URI_DB) << std::endl; ;
+    std::cout <<  getInput()->getStr(STR_URI_FILE) << std::endl; ;
    
     _ion_mode= false;
     if ( getParser()->saw (Bloocoo::STR_ION) )
@@ -944,7 +957,7 @@ void Bloocoo::execute ()
     
     
     bool fastq_mode= false;
-    if( getInput()->getStr(STR_URI_DB).find("fastq") !=  string::npos )  fastq_mode =true;
+    if( getInput()->getStr(STR_URI_FILE).find("fastq") !=  string::npos )  fastq_mode =true;
     //printf("-- %s -- fq mode %i \n",getInput()->getStr(DSK::STR_URI_DATABASE).c_str(),fastq_mode);
     
     /*************************************************/
@@ -963,7 +976,7 @@ void Bloocoo::execute ()
     
     /** We get the basename from the provided URI (ie remove directory path and suffix). */
     //<<<<<<< Updated upstream
-    string prefix = System::file().getBaseName (getInput()->getStr(STR_URI_DB));
+    string prefix = System::file().getBaseName (getInput()->getStr(STR_URI_FILE));
     
     //=======
     //    string prefix = System::file().getBaseName (getInput()->getStr(DSK::STR_URI_DATABASE));
@@ -988,17 +1001,18 @@ void Bloocoo::execute ()
 
     int nb_corrector_threads_living;
     
-#ifdef ERR_TAB
-    //file with list of errors, for testing purposes
-    string ferrfile = prefix + string ("_bloocoo_corr_errs.tab");
-    
-    _errfile = System::file().newFile (ferrfile, "wb");
-    
-    //file with list of errors, for testing purposes, with name of method responsible of correction
-    string ferrfile2 = prefix + string ("_bloocoo_corr_errs_full.tab");
-    
-    _errfile_full = System::file().newFile (ferrfile2, "wb");
-#endif
+    if (getInput()->get(Bloocoo::STR_ERR_TAB) != 0)
+    {
+        //file with list of errors, for testing purposes
+        string ferrfile = prefix + string ("_bloocoo_corr_errs.tab");
+
+        _errfile = System::file().newFile (ferrfile, "wb");
+
+        //file with list of errors, for testing purposes, with name of method responsible of correction
+        string ferrfile2 = prefix + string ("_bloocoo_corr_errs_full.tab");
+
+        _errfile_full = System::file().newFile (ferrfile2, "wb");
+    }
     
 #if PRINT_LOG_MULTI
     string ferrfile3 = prefix + string ("_debug.tab");
@@ -1704,14 +1718,13 @@ int Bloocoo::apply_correction(char *readseq, int pos, int good_nt,int algo, Sequ
 		__badReadStack += "\t\t\t" + str__seq_num + "\t" + str_pos + "\t" + bin2NT[good_nt] + "\t" + readseq[pos] + "\n";
 	}
 	//printf("\t\t%i\t%i\t%c\t%c\n",_seq_num,pos,bin2NT[good_nt],readseq[pos]);
-	
-#ifdef ERR_TAB
-    pthread_mutex_lock(&errtab_mutex);
-    
-    _errfile->print("%i\t%i\t%c\t%c\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos]);
-    _errfile_full->print("%i\t%i\t%c\t%c;%s\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos],methodname[algo]);
-    pthread_mutex_unlock(&errtab_mutex);
-#endif
+
+	if (getInput()->get(Bloocoo::STR_ERR_TAB) != 0)
+    {
+	    LocalSynchronizer synchro (getErrtabMutex());
+	    _errfile->print("%i\t%i\t%c\t%c\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos]);
+	    _errfile_full->print("%i\t%i\t%c\t%c;%s\n",cur_seq.getIndex(),pos,bin2NT[good_nt],readseq[pos],methodname[algo]);
+    }
     
     readseq[pos] = bin2NT[good_nt]; //correc sequence in ram
     // printf("error found pos %i  read %i\n",ii, _bloocoo->_seq_num);

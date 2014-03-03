@@ -28,30 +28,17 @@
 
 #define TAB_MULTIVOTE_SIZE (16*16*128)
 
-//#define ERR_TAB  // only in single thread mode
-
-/********************************************************************************/
-
-/** NOTE: we should not include namespaces here => only to make user life easier... */
-using namespace gatb::core;
-using namespace gatb::core::tools;
-using namespace gatb::core::bank;
-using namespace gatb::core::kmer::impl;
-
-using namespace gatb::core::system;
-using namespace gatb::core::system::impl;
-
 /********************************************************************************/
 /* Class Bloocoo for read correction : takes as input a bag of solid kmers (dsk result),
  insert that in a bloom filter, and correct read form it*/
 /********************************************************************************/
 
-typedef kmer::impl::Kmer<>::Model KmerModel;
-typedef kmer::impl::Kmer<>::Type  kmer_type;
-typedef kmer::impl::Kmer<>::Count kmer_count;
+typedef Kmer<>::Model KmerModel;
+typedef Kmer<>::Type  kmer_type;
+typedef Kmer<>::Count kmer_count;
 
 
-class Bloocoo : public misc::impl::Tool
+class Bloocoo : public Tool
 {
 //private:
 public:
@@ -71,10 +58,13 @@ public:
 		NB_CORRECTION_METHODS,
 	};
 	
-	
-#ifdef ERR_TAB
-    pthread_mutex_t errtab_mutex;
-#endif
+	/** Synchronizer. */
+	ISynchronizer* errtab_mutex;
+	ISynchronizer* getErrtabMutex()
+	{
+	    if (errtab_mutex==0)  { errtab_mutex = System::thread().newSynchronizer(); }
+	    return errtab_mutex;
+	}
     
     size_t          _kmerSize;
     std::string     _solidFile;
@@ -88,6 +78,7 @@ public:
     static const char* STR_ION;
     static const char* STR_NB_MIN_VALID;
     static const char* STR_NB_VALIDATED_KMERS;
+    static const char* STR_ERR_TAB;
     
     IFile*      _errfile;
     IFile*      _errfile_full;
@@ -107,6 +98,8 @@ public:
     /** */
     Bloocoo ();
 
+    /** */
+    ~Bloocoo ();
 	
     unsigned int make_index(int pos1, int dist, int nt1, int nt2);
     int decode_index(unsigned int idx, int * pos1, int * dist, int * nt1, int * nt2);
@@ -140,7 +133,7 @@ public:
 	
 private:
 
-    collections::impl::Bloom<kmer_type>* _bloom;
+    Bloom<kmer_type>* _bloom;
     
     /** */
     void execute ();
@@ -148,7 +141,7 @@ private:
     
 
     /** */
-    virtual collections::impl::Bloom<kmer_type>* createBloom ();
+    virtual Bloom<kmer_type>* createBloom ();
     
     
     
