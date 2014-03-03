@@ -30,7 +30,7 @@ int main (int argc, char* argv[])
     // We define a try/catch block in case some method fails
     try
     {
-        misc::impl::ToolComposite tool;
+        ToolComposite tool;
 
         tool.add (new DSK           ());
         tool.add (new Bloocoo       ());
@@ -38,14 +38,14 @@ int main (int argc, char* argv[])
         tool.run (argc, argv);
     }
 
-    catch (misc::impl::OptionFailure& e)
+    catch (OptionFailure& e)
     {
         e.getParser().displayErrors (stdout);
         e.getParser().displayHelp   (stdout);
         return EXIT_FAILURE;
     }
 
-    catch (gatb::core::system::Exception& e)
+    catch (Exception& e)
     {
         cerr << "EXCEPTION: " << e.getMessage() << endl;
         return EXIT_FAILURE;
