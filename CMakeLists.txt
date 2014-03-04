@@ -3,15 +3,24 @@ project(Bloocoo)
 cmake_minimum_required (VERSION 2.6)
 
 ################################################################################
-# GATB-CORE
+# Define cmake modules path
+################################################################################
+FOREACH (path "cmake" "../../cmake")
+    IF (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${path}")
+        SET (CMAKE_MODULE_PATH  "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/${path}")
+    ENDIF()
+ENDFOREACH(path)
+
+################################################################################
+# THIRD PARTIES
 ################################################################################
 
-# we don't want to install GATB-CORE items
-SET (GATB_CORE_INSTALL_EXCLUDE "1")
+# GATB CORE
+include (GatbCore)
 
-# we depend on gatb-core; here, we define where to find all the required material
-add_subdirectory (../../thirdparty/gatb-core/gatb-core  "${CMAKE_CURRENT_BINARY_DIR}/ext/gatb-core")
-
+# DSK
+LOOKUP_PATH ("dsk" "../dsk;thirdparty/dsk" ${PROJECT_SOURCE_DIR} DSK_PATH)
+LIST (APPEND CPACK_SOURCE_INSTALLED_DIRECTORIES  "${DSK_PATH}" "thirdparty/dsk") 
 
 ################################################################################
 # TOOL
@@ -24,10 +33,10 @@ add_definitions (${gatb-core-flags})
 #       - from project source 
 #       - from GATB-CORE source
 #       - from dsk source 
-include_directories (src  ${gatb-core-includes} ../dsk/src )
+include_directories (src  ${gatb-core-includes} ${DSK_PATH}/src )
 
 # we define the files to be compiled
-file (GLOB_RECURSE  ProjectFiles  src/*  ../dsk/src/DSK.* )
+file (GLOB_RECURSE  ProjectFiles  src/*  ${DSK_PATH}/src/DSK.* )
 
 # we define the artifact to be built: the project binary
 add_executable        (${PROJECT_NAME}  ${ProjectFiles})
@@ -36,6 +45,18 @@ add_executable        (${PROJECT_NAME}  ${ProjectFiles})
 target_link_libraries (${PROJECT_NAME}  ${gatb-core-libraries})
 
 ################################################################################
-#  INSTALLATION 
+#  PACKAGING 
 ################################################################################
-install (TARGETS ${PROJECT_NAME} DESTINATION bin)
+
+# We chose the kind of archive we want to generate
+SET (CPACK_GENERATOR            "TGZ")
+SET (CPACK_SOURCE_GENERATOR     "TGZ")
+
+# We copy the project binary to the 'bin' directory
+INSTALL (TARGETS ${PROJECT_NAME} DESTINATION bin)
+
+# For the source archive, we exclude some unwanted directories.
+SET (CPACK_SOURCE_IGNORE_FILES  ${CPACK_SOURCE_IGNORE_FILES} "/build/" "/test/" "/sam_stats/"  ".gitignore$")
+
+# To be done at the end. 
+INCLUDE (CPack)
