@@ -32,10 +32,12 @@ using namespace std;
 /********************************************************************************/
 // We define some string constants.
 /********************************************************************************/
-const char* Bloocoo::STR_NB_MIN_VALID       = "-nbmin-valid";
+//const char* Bloocoo::STR_NB_MIN_VALID       = "-nbmin-valid";
 const char* Bloocoo::STR_ION                = "-ion";
-const char* Bloocoo::STR_NB_VALIDATED_KMERS = "-nkmer-checked";
+//const char* Bloocoo::STR_NB_VALIDATED_KMERS = "-nkmer-checked";
 const char* Bloocoo::STR_ERR_TAB            = "-err-tab";
+const char* Bloocoo::STR_SECURE            = "-secure";
+const char* Bloocoo::STR_SLOW            = "-slow";
 
 // these 2 tabs are now known globally
 //char bin2NT[4] = {'A','C','T','G'};
@@ -207,8 +209,11 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
     getParser()->add (parserDSK);
 
     /** We add options specific to this tool. */
-    getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"3"));
-    getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"4"));
+    getParser()->push_back(new OptionOneParam(STR_URI_OUTPUT, "output file", false));
+    getParser()->push_back(new OptionNoParam (Bloocoo::STR_SECURE, "correct less but introduce less mistakes", false));
+    getParser()->push_back(new OptionNoParam (Bloocoo::STR_SLOW, "slower but better correction", false));
+    //getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"3"));
+    //getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"4"));
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ION,                  "ion correction mode", false));
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ERR_TAB,              "generate error tabs", false));
 }
@@ -237,13 +242,16 @@ Bloocoo::~Bloocoo ()
  *********************************************************************/
 void Bloocoo::execute ()
 {
+	cout << "Executing Bloocoo" << endl;
+	
     /*************************************************/
     // We set some attributes (shortcuts).
     /*************************************************/
     _kmerSize           = getInput()->getInt (STR_KMER_SIZE);
     _solidFile          = getInput()->getStr (STR_KMER_SOLID);
-    _nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
-    _nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
+    chooseCorrectionParams();
+    //_nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
+    //_nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
     
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
@@ -252,9 +260,10 @@ void Bloocoo::execute ()
     LOCAL (_bloom);
     
     //iterate over initial file
-    BankFasta inbank (getInput()->getStr(STR_URI_FILE));
+    string inputFilename = getInput()->getStr(STR_URI_FILE);
+    BankFasta inbank(inputFilename);
     
-    std::cout <<  getInput()->getStr(STR_URI_FILE) << std::endl; ;
+    //cout <<  inputFilename << std::endl;
    
     _ion_mode= false;
     if ( getParser()->saw (Bloocoo::STR_ION) )
@@ -265,7 +274,7 @@ void Bloocoo::execute ()
     
     
     bool fastq_mode= false;
-    if( getInput()->getStr(STR_URI_FILE).find("fastq") !=  string::npos )  fastq_mode =true;
+    if( inputFilename.find("fastq") !=  string::npos )  fastq_mode =true;
     //printf("-- %s -- fq mode %i \n",getInput()->getStr(DSK::STR_URI_DATABASE).c_str(),fastq_mode);
     
     /*************************************************/
@@ -281,24 +290,33 @@ void Bloocoo::execute ()
     /*************************************************/
     // We create the corrected file
     /*************************************************/
-    
-    /** We get the basename from the provided URI (ie remove directory path and suffix). */
-    //<<<<<<< Updated upstream
-    string prefix = System::file().getBaseName (getInput()->getStr(STR_URI_FILE));
-    
-    //=======
-    //    string prefix = System::file().getBaseName (getInput()->getStr(DSK::STR_URI_DATABASE));
-    //
-    //>>>>>>> Stashed changes
-    /** We set the filename as the base name + a specific suffix. */
-    string fileName;
-    if(fastq_mode)
-        fileName = prefix + string("_corrected.fastq");
-    else
-        fileName = prefix + string("_corrected.fasta");
+	string prefix;
+    string outputFilename;
+    if(getInput()->get(STR_URI_OUTPUT)){
+		outputFilename = getInput()->getStr(STR_URI_OUTPUT);
+		prefix = System::file().getBaseName(outputFilename);
+	}
+	else{
+		/** We get the basename from the provided URI (ie remove directory path and suffix). */
+		//<<<<<<< Updated upstream
+		prefix = System::file().getBaseName(inputFilename);
+		//=======
+		//    string prefix = System::file().getBaseName (getInput()->getStr(DSK::STR_URI_DATABASE));
+		//
+		//>>>>>>> Stashed changes
+		/** We set the filename as the base name + a specific suffix. */
+		//string fileName;
+		if(fastq_mode)
+			outputFilename = prefix + string("_corrected.fastq");
+		else
+			outputFilename = prefix + string("_corrected.fasta");
+	}
+
+	cout << "\tInput filename: " << inputFilename << endl;
+	cout << "\tOutput filename: " << outputFilename << endl;
     
     bool gz_mode= false;
-    BankFasta outbank (fileName,fastq_mode,gz_mode);
+    BankFasta outbank (outputFilename, fastq_mode,gz_mode);
     
     
     BagCache<Sequence> *  outbank_cache = new BagCache<Sequence> (&outbank,10000);
@@ -323,11 +341,10 @@ void Bloocoo::execute ()
         _errfile_full = System::file().newFile (ferrfile2, "wb");
     }
     
-#if PRINT_LOG_MULTI
-    string ferrfile3 = prefix + string ("_debug.tab");
-    
-    _debug = System::file().newFile (ferrfile3, "wb");
-#endif
+	#if PRINT_LOG_MULTI
+		string ferrfile3 = prefix + string ("_debug.tab");
+		_debug = System::file().newFile (ferrfile3, "wb");
+	#endif
     /*************************************************/
     // We iterate over sequences and correct them
     /*************************************************/
@@ -340,11 +357,11 @@ void Bloocoo::execute ()
         
         nb_corrector_threads_living = 0 ;
         
-#ifdef SERIAL
-        setDispatcher (new SerialDispatcher());
-#else
-        setDispatcher (  new Dispatcher (getInput()->getInt(STR_NB_CORES)) );
-#endif
+		#ifdef SERIAL
+			setDispatcher (new SerialDispatcher());
+		#else
+			setDispatcher (  new Dispatcher (getInput()->getInt(STR_NB_CORES)) );
+		#endif
         
         
         //replace outbank_cache with &outbank to remove usage of bagcache
@@ -363,7 +380,7 @@ void Bloocoo::execute ()
         getInfo()->add (2, "nb ins corrected", "%ld", total_nb_ins_corrected);
         getInfo()->add (2, "nb del corrected", "%ld", total_nb_del_corrected);
     }
-    getInfo()->add (2, "corrected file",      fileName);
+    getInfo()->add (2, "corrected file", outputFilename);
     #ifdef PRINT_STATS
     	printf("Correction methods stats (TwoSided, Agressive, Vote, MultiMutateVote, SideVote):\n");
 		for(int i=0; i<NB_CORRECTION_METHODS; i++){
@@ -371,7 +388,56 @@ void Bloocoo::execute ()
 		}
 	#endif
     
+}
+
+/*********************************************************************
+ ** secure mode: correction with high precision
+ ** slow mode: more correction loop for each read
+ ** _nb_less_restrictive_correction: perform n correction loop while the read is not fully corrected (n is the value of _nb_less_restrictive_correction)
+ ** _only_decrease_nb_min_valid: If true, each correction loop is performed with a reduced _nb_min_valid (meaning a better recall).
+ **                              If false, both _nb_min_valid and _nb_kmers_checked are reduced (meaning a better precision)
+ *********************************************************************/
+void Bloocoo::chooseCorrectionParams(){
+    bool isSecureMode = getParser()->saw(Bloocoo::STR_SECURE);
+    bool isSlowMode = getParser()->saw(Bloocoo::STR_SLOW);
     
+	if(isSlowMode){
+		_nb_less_restrictive_correction = 2;
+		if(isSecureMode){ 
+			_nb_kmers_checked = 8;
+			_nb_min_valid = 7;
+			_only_decrease_nb_min_valid = false;
+		}
+		else{
+			_nb_kmers_checked = 8;
+			_nb_min_valid = 6;
+			_only_decrease_nb_min_valid = true;
+		}
+	}
+	else{
+		_nb_less_restrictive_correction = 1;
+		if(isSecureMode){ 
+			_nb_kmers_checked = 8;
+			_nb_min_valid = 7;
+			_only_decrease_nb_min_valid = false;
+		}
+		else{
+			_nb_kmers_checked = 5;
+			_nb_min_valid = 4;
+			_only_decrease_nb_min_valid = false;
+		}
+	}
+    
+
+	_max_multimutation_distance = 6;
+	
+	cout << "Correction params are:" << endl;
+	cout << "\tSecure mode: " << isSecureMode << endl;
+    cout << "\tSlow mode: " << isSlowMode << endl;
+	cout << "\tKmers checked: " << _nb_kmers_checked << endl;
+	cout << "\tMin kmers valid: " << _nb_min_valid << endl;
+	cout << "\tDecrease only kmers min valid: " << _only_decrease_nb_min_valid << endl;
+	cout << "\tCorrection loop: " << _nb_less_restrictive_correction << endl;
 }
 
 /*********************************************************************
@@ -445,9 +511,9 @@ _synchro(System::thread().newSynchronizer()),_temp_nb_seq_done(0), _nb_living(nb
 	_tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
    //   printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
 	
-	_nb_less_restrictive_correction = 1;
-    _max_multimutation_distance = 6;
-    _only_decrease_nb_min_valid = true; // false = descend les 2, recall plus faible
+	_nb_less_restrictive_correction = _bloocoo->_nb_less_restrictive_correction;
+    _max_multimutation_distance = _bloocoo->_max_multimutation_distance;
+    _only_decrease_nb_min_valid = _bloocoo->_only_decrease_nb_min_valid; // false = descend les 2, recall plus faible
 	_kmerSize = _bloocoo->_kmerSize;
 	_nb_kmers_checked = _bloocoo->_nb_kmers_checked;
 	_nb_min_valid = _bloocoo->_nb_min_valid;

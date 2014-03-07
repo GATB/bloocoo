@@ -71,13 +71,18 @@ public:
     size_t _kmerSize;
     int _nb_kmers_checked;
     int _nb_min_valid;
+	int _nb_less_restrictive_correction;
+    int _max_multimutation_distance;
+    int _only_decrease_nb_min_valid;
     
     IBank* _inputBank;
 
     static const char* STR_ION;
-    static const char* STR_NB_MIN_VALID;
-    static const char* STR_NB_VALIDATED_KMERS;
+    //static const char* STR_NB_MIN_VALID;
+    //static const char* STR_NB_VALIDATED_KMERS;
     static const char* STR_ERR_TAB;
+	static const char* STR_SECURE;
+	static const char* STR_SLOW;
     
     bool _wantErrTabFile;
     IFile*      _errfile;
@@ -108,7 +113,7 @@ private:
     
     void execute ();
     virtual Bloom<kmer_type>* createBloom ();
-    
+    void chooseCorrectionParams();
     
     
 };
