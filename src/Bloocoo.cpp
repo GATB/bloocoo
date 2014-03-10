@@ -36,7 +36,8 @@ using namespace std;
 const char* Bloocoo::STR_ION                = "-ion";
 //const char* Bloocoo::STR_NB_VALIDATED_KMERS = "-nkmer-checked";
 const char* Bloocoo::STR_ERR_TAB            = "-err-tab";
-const char* Bloocoo::STR_SECURE            = "-secure";
+const char* Bloocoo::STR_RECALL            = "-high-recall";
+const char* Bloocoo::STR_PRECISION            = "-high-precision";
 const char* Bloocoo::STR_SLOW            = "-slow";
 
 // these 2 tabs are now known globally
@@ -210,7 +211,8 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
 
     /** We add options specific to this tool. */
     getParser()->push_back(new OptionOneParam(STR_URI_OUTPUT, "output file", false));
-    getParser()->push_back(new OptionNoParam (Bloocoo::STR_SECURE, "correct less but introduce less mistakes", false));
+    getParser()->push_back(new OptionNoParam (Bloocoo::STR_RECALL, "correct a lot but can introduce more mistakes", false));
+    getParser()->push_back(new OptionNoParam (Bloocoo::STR_PRECISION, "correct safely, correct less but introduce less mistakes", false));
     getParser()->push_back(new OptionNoParam (Bloocoo::STR_SLOW, "slower but better correction", false));
     //getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_MIN_VALID,        "min number of kmers to valid a correction", false,"3"));
     //getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"4"));
@@ -398,33 +400,42 @@ void Bloocoo::execute ()
  **                              If false, both _nb_min_valid and _nb_kmers_checked are reduced (meaning a better precision)
  *********************************************************************/
 void Bloocoo::chooseCorrectionParams(){
-    bool isSecureMode = getParser()->saw(Bloocoo::STR_SECURE);
+    bool isRecallMode = getParser()->saw(Bloocoo::STR_RECALL);
+    bool isPrecisionMode = getParser()->saw(Bloocoo::STR_PRECISION);
     bool isSlowMode = getParser()->saw(Bloocoo::STR_SLOW);
     
 	if(isSlowMode){
 		_nb_less_restrictive_correction = 2;
-		if(isSecureMode){ 
+		if(isRecallMode){ //8-4 8-2
+			_nb_kmers_checked = 8;
+			_nb_min_valid = 4;
+			_only_decrease_nb_min_valid = true;
+		}
+		else if(isPrecisionMode){ //8-7 6-5
 			_nb_kmers_checked = 8;
 			_nb_min_valid = 7;
 			_only_decrease_nb_min_valid = false;
-		}
-		else{
+		} 
+		else{ //8-7 8-5
 			_nb_kmers_checked = 8;
-			_nb_min_valid = 6;
+			_nb_min_valid = 7;
 			_only_decrease_nb_min_valid = true;
 		}
 	}
 	else{
 		_nb_less_restrictive_correction = 1;
-		if(isSecureMode){ 
-			_nb_kmers_checked = 8;
-			_nb_min_valid = 7;
-			_only_decrease_nb_min_valid = false;
+		_only_decrease_nb_min_valid = false;
+		if(isRecallMode){ 
+			_nb_kmers_checked = 5;
+			_nb_min_valid = 2;
 		}
+		else if(isPrecisionMode){ 
+			_nb_kmers_checked = 5;
+			_nb_min_valid = 5;
+		} 
 		else{
 			_nb_kmers_checked = 5;
 			_nb_min_valid = 4;
-			_only_decrease_nb_min_valid = false;
 		}
 	}
     
@@ -432,8 +443,16 @@ void Bloocoo::chooseCorrectionParams(){
 	_max_multimutation_distance = 6;
 	
 	cout << "Correction params are:" << endl;
-	cout << "\tSecure mode: " << isSecureMode << endl;
-    cout << "\tSlow mode: " << isSlowMode << endl;
+	if(isRecallMode)
+		cout << "\tMode: High-recall" << endl;
+	else if(isPrecisionMode)
+		cout << "\tMode: High-precision" << endl;
+	else
+		cout << "\tMode: Default" << endl;
+	if(isSlowMode)
+		cout << "\tSlow mode: Yes" << endl;
+	else
+		cout << "\tSlow mode: No" << endl;
 	cout << "\tKmers checked: " << _nb_kmers_checked << endl;
 	cout << "\tMin kmers valid: " << _nb_min_valid << endl;
 	cout << "\tDecrease only kmers min valid: " << _only_decrease_nb_min_valid << endl;
