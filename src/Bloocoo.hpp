@@ -54,7 +54,6 @@ public:
 		AGRESSIVE,
 		VOTE,
 		MULTI_MUTATE_VOTE,
-		READ_SIDE,
 		NB_CORRECTION_METHODS,
 	};
 	
@@ -84,6 +83,8 @@ public:
 	static const char* STR_RECALL;
 	static const char* STR_PRECISION;
 	static const char* STR_SLOW;
+	static const char* STR_IN_ORDER;
+	static const char* STR_MAX_TRIM;
     
     bool _wantErrTabFile;
     IFile*      _errfile;
@@ -91,6 +92,8 @@ public:
     IFile*      _debug;
 
 	bool _ion_mode;
+    bool _in_order;
+    unsigned int _max_trim;
     
 	int __correction_methods_successes[NB_CORRECTION_METHODS]; //Variable de debug pour afficher l'efficacité des méthodes de correction
 	int __correction_methods_calls[NB_CORRECTION_METHODS]; //Variable de debug pour afficher le nb d'appels
@@ -105,8 +108,16 @@ public:
     /** */
     ~Bloocoo ();
 	
+	//unsigned int __error_detected;
 
 
+    //test compression to remove
+	unsigned int _readCount;
+	float _anchorKmerCount;
+	float _readWithoutAnchorCount;
+	float _total_kmer_indexed;
+	float _uniq_mutated_kmer;
+	unsigned long _total_kmer;
 	
 private:
 
@@ -115,7 +126,6 @@ private:
     void execute ();
     virtual Bloom<kmer_type>* createBloom ();
     void chooseCorrectionParams();
-    
     
 };
 
@@ -161,6 +171,7 @@ class CorrectReads
 		
 		size_t _kmerSize;
 		int _readSize;
+		int _kmerCount;
 		int _nb_kmers_checked;
 		int _nb_min_valid;
 		int _nb_kmer_offset;
@@ -168,6 +179,8 @@ class CorrectReads
 		int _max_multimutation_distance;
 		bool _only_decrease_nb_min_valid;
 		bool _wantErrTabFile;
+		
+		bool _continue_correction;
 		
 		// KmerModel           model;
 		// KmerModel::Iterator itKmer;
@@ -186,7 +199,9 @@ class CorrectReads
 		size_t _temp_nb_seq_done;
 		
 		void execute();
-		void update_nb_errors_corrected(int nb_errors_corrected, bool* continue_correction);
+		void writeSequence();
+		void trimSequence();
+		void update_nb_errors_corrected(int nb_errors_corrected); //not needed in new version
 		int apply_correction(int pos, int good_nt,int algo);
 		int twoSidedCorrection(int pos);
 		int aggressiveCorrection(int pos, int nb_kmer_check, Direction direction);
@@ -212,6 +227,31 @@ class CorrectReads
 	
 		unsigned int make_index(int pos1, int dist, int nt1, int nt2);
 		int decode_index(unsigned int idx, int * pos1, int * dist, int * nt1, int * nt2);
+		
+		
+		
+		
+		
+		//ion correction
+		kmer_type _last_wrong_kmer;
+		int _pos_homopo;
+	
+		void ionCorrection(int ii);
+		void ionCorrection2(int ii, kmer_type current_kmer, int untrusted_zone_size);
+		
+		
+		
+		//new method
+		void execute2();
+		bool searchError(bool* error_exist);
+		int searchErrorZoneRec(int pos, bool extendRight, int trustedKmerCount);
+		int startCorrectionInZone(int startPos, int endPos);
+		
+		//test method to remove
+		vector<kmer_type> _anchorKmers;
+		void testBloomCompression();
+		bool testAnchorKmerExist(kmer_type anchorKmer);
+		
 };
 
 /********************************************************************************/
