@@ -39,7 +39,6 @@ const char* Bloocoo::STR_ERR_TAB            = "-err-tab";
 const char* Bloocoo::STR_RECALL            = "-high-recall";
 const char* Bloocoo::STR_PRECISION            = "-high-precision";
 const char* Bloocoo::STR_SLOW            = "-slow";
-const char* Bloocoo::STR_IN_ORDER            = "-in-order";
 const char* Bloocoo::STR_MAX_TRIM            = "-max-trim";
 
 // these 2 tabs are now known globally
@@ -220,7 +219,6 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
     //getParser()->push_back (new OptionOneParam (Bloocoo::STR_NB_VALIDATED_KMERS,  "number of kmers checked when correcting an error", false,"4"));
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ION, "ion correction mode", false));
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ERR_TAB, "generate error tabs", false));
-    getParser()->push_back (new OptionNoParam (Bloocoo::STR_IN_ORDER, "keep the input order of reads in the output", false));
     getParser()->push_back(new OptionOneParam(STR_MAX_TRIM, "max number of bases that can be trimmed per read", false));
 }
 
@@ -277,9 +275,7 @@ void Bloocoo::execute ()
 		_max_trim = getInput()->getInt(STR_MAX_TRIM);
 	}
 	
-	cout << "Max trim: " << _max_trim << endl;
-    _in_order = getInput()->get(Bloocoo::STR_IN_ORDER) != 0;
-    cout << "In order: " << _in_order << endl;
+	//cout << "Max trim: " << _max_trim << endl;
     
     _ion_mode= false;
     if ( getParser()->saw (Bloocoo::STR_ION) )
@@ -403,19 +399,7 @@ void Bloocoo::execute ()
 			printf("%i    /  %i \n", __correction_methods_successes[i], __correction_methods_calls[i] );
 		}
 	#endif
-	
-	/*
-	//cout << "ERROR DETECTED: " << __error_detected << endl;
-	cout << "Read count:    " << _readCount << endl;
-    cout << "Anchor kmer count:   " << _anchorKmerCount << endl;
-    cout << "Anchor per read:    " << _readCount / _anchorKmerCount << endl;
-    cout << "Bit per anchor: " << log2(_anchorKmerCount);
-    cout << endl;
-    cout << "Read without anchor: " << (_readWithoutAnchorCount*100) / _readCount << "%" << endl;
-    cout << endl;
-	cout << "Total kmer: " <<  _total_kmer << endl;
-	cout << "Kmer in bloom:  " << (_total_kmer_indexed*100) / _total_kmer << "%" << endl;
-	cout << "Uniq mutated kmer: " << (_uniq_mutated_kmer*100) / _total_kmer << "%" << endl;*/
+
 }
 
 /*********************************************************************
@@ -572,6 +556,7 @@ _synchro(System::thread().newSynchronizer()),_temp_nb_seq_done(0), _nb_living(nb
 
 	}
 	
+	//_hashAnchorKmers = new OAHash<kmer_type>(1000000);
 	
 }
 
@@ -667,104 +652,8 @@ void CorrectReads::operator()(Sequence& sequence){
 	_use_newSeq = false;
 	
 	execute2();
-	//testBloomCompression();
 }
 
-bool CorrectReads::testAnchorKmerExist(kmer_type anchorKmer){
-	return (std::find(_anchorKmers.begin(), _anchorKmers.end(), anchorKmer) != _anchorKmers.end());
-}
-
-void CorrectReads::testBloomCompression(){
-	_bloocoo->_readCount += 1;
-	
-	bool anchorExist = false;
-	kmer_type anchorKmer = 0;
-	kmer_type current_kmer, current_kmer_min;
-	KmerModel model (_kmerSize, KMER_DIRECT);
-	KmerModel::Iterator itKmer (model);
-	itKmer.setData (_sequence->getData());
-	
-	int i=0;
-	for (itKmer.first(); !itKmer.isDone(); itKmer.next(), i++){
-		current_kmer = *itKmer;
-		current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
-		if(testAnchorKmerExist(current_kmer_min)){
-			anchorKmer = current_kmer_min;
-			anchorExist = true;
-			break;
-		}
-	}
-	
-	i=0;
-	if(!anchorExist){
-		itKmer.setData (_sequence->getData());
-		for (itKmer.first(); !itKmer.isDone(); itKmer.next(), i++){
-			current_kmer = *itKmer;
-			current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
-			if(_bloom->contains(current_kmer_min)){
-				anchorKmer = current_kmer_min;
-				_anchorKmers.push_back(anchorKmer);
-				_bloocoo->_anchorKmerCount += 1;
-				anchorExist = true;
-				break;
-			}
-		}
-	}
-		
-	if(!anchorExist){
-		_bloocoo->_readWithoutAnchorCount += 1;
-		return;
-	}
-	
-	i=0;
-	itKmer.setData (_sequence->getData());
-	for (itKmer.first(); !itKmer.isDone(); itKmer.next(), i++){
-		if(i >= _readSize-_kmerSize) continue;
-		
-		_bloocoo->_total_kmer +=1;
-		
-		int indexedKmerCount = 0;
-		current_kmer = *itKmer;
-		current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
-		
-		if(_bloom->contains(current_kmer_min)){
-			_bloocoo->_total_kmer_indexed += 1;
-		}
-		else{
-			continue;
-		}
-			
-			
-		//cout << i  << " ";
-		//current_kmer.printASCII(_kmerSize);
-		//cout << current_kmer << endl;
-		//kmer_type current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
-		
-		//int original_nt = (_readseq[i]>>1)&3;
-		
-		for(int nt=0; nt<4; nt++)
-		{
-			//if(nt == original_nt){
-			//	continue;
-			//}
-			
-			kmer_type mutated_kmer = current_kmer;
-			codeSeedBin(&model, &mutated_kmer, nt, RIGHT);
-			kmer_type mutated_kmer_min = min(mutated_kmer, revcomp(mutated_kmer, _kmerSize));
-			
-			//mutated_kmer.printASCII(_kmerSize);
-			
-			if(_bloom->contains(mutated_kmer_min)){
-				indexedKmerCount += 1;
-			}
-			
-		}
-		
-		if(indexedKmerCount == 1){
-			_bloocoo->_uniq_mutated_kmer += 1;
-		}
-	}
-}
 
         
 void CorrectReads::execute(){
@@ -1057,6 +946,7 @@ void CorrectReads::execute(){
 
 
 void CorrectReads::execute2(){
+	
 	int nb_tries =0;
 	
 	int nb_checked;
@@ -1101,7 +991,7 @@ void CorrectReads::execute2(){
 				itKmer2.setData (_sequence->getData());
 				int i3=0;
 
-				cout << "Read " << _sequence->getIndex() << endl;
+				cout << endl << "Read " << _sequence->getIndex() << endl;
 				cout << "\t" << _sequence->getDataBuffer() << endl << "\t";
 				
 				for (itKmer2.first(); !itKmer2.isDone(); itKmer2.next(),i3++){
@@ -1128,7 +1018,6 @@ void CorrectReads::execute2(){
 	
 	writeSequence();
 
-	//testBloomCompression();
 }
 
 void CorrectReads::trimSequence(){
@@ -1239,18 +1128,13 @@ void CorrectReads::writeSequence(){
 	#ifdef SERIAL
 		_outbank->insert (*_sequence); //output corrected sequence
 	#else
-		if(_bloocoo->_in_order){
-			_bankwriter->insert(*_sequence);//
-			_temp_nb_seq_done ++;
-			
-			if(_temp_nb_seq_done == 10000) // careful with this val, should be a divisor of buffer size in ordered bank
-			{
-				_bankwriter->incDone(_temp_nb_seq_done);
-				_temp_nb_seq_done=0;
-			}
-		}
-		else{
-			_outbank->insert (*_sequence); //output corrected sequence
+		_bankwriter->insert(*_sequence);//
+		_temp_nb_seq_done ++;
+		
+		if(_temp_nb_seq_done == 10000) // careful with this val, should be a divisor of buffer size in ordered bank
+		{
+			_bankwriter->incDone(_temp_nb_seq_done);
+			_temp_nb_seq_done=0;
 		}
 	#endif
 }
@@ -1260,21 +1144,22 @@ void CorrectReads::writeSequence(){
 bool CorrectReads::searchError(bool* error_exist)
 {
 	*error_exist = false;
-	int _min_successive_trusted_kmers = 2;
+	//int _min_successive_trusted_kmers = 2;
 	
-	int min_successive_trusted_kmers = _min_successive_trusted_kmers;
+	//int min_successive_trusted_kmers = _min_successive_trusted_kmers;
 	kmer_type current_kmer;
 	kmer_type current_kmer_min;
 	int nb_errors_cor = 0;
-	int successive_trusted_kmer_count = 0;
+	//int successive_trusted_kmer_count = 0;
 				
 	#ifdef PRINT_DEBUG
-		std::string debug_str = "\t";
+		string debug_str = "\t";
 		int debug_str_index = 0;
 	#endif
 	
-	int i = 0;
-	while(i < _kmerCount){
+	for(int i=0; i<_kmerCount; i++){
+	//int i = 0;
+	//while(i < _kmerCount){
 		
 		#ifdef PRINT_DEBUG
 			while(debug_str_index < i){
@@ -1294,8 +1179,8 @@ bool CorrectReads::searchError(bool* error_exist)
 				debug_str_index += 1;
 			#endif
 			
-			successive_trusted_kmer_count += 1;
-			
+			//successive_trusted_kmer_count += 1;
+			/*
 			if(successive_trusted_kmer_count >= min_successive_trusted_kmers){
 				successive_trusted_kmer_count = 0;
 				if(i==_kmerCount-1){
@@ -1316,19 +1201,19 @@ bool CorrectReads::searchError(bool* error_exist)
 				i = _kmerCount-min_successive_trusted_kmers;
 				continue;
 			}
-			
+			*/
 		}
 		//non solid kmer detected
 		else{
 			//_bloocoo->__error_detected += 1;
 			*error_exist = true;
-			successive_trusted_kmer_count = 0;
+			//successive_trusted_kmer_count = 0;
 			
 			int startPos = searchErrorZoneRec(i, false, 0);
 			int endPos = searchErrorZoneRec(i, true, 0);
 			
-			int min_successive_possible = _kmerCount - endPos - 1;
-			min_successive_trusted_kmers = min(min_successive_possible, _min_successive_trusted_kmers);
+			//int min_successive_possible = _kmerCount - endPos - 1;
+			//min_successive_trusted_kmers = min(min_successive_possible, _min_successive_trusted_kmers);
 			
 			#ifdef PRINT_DEBUG
 				debug_str += "0";
@@ -1350,7 +1235,7 @@ bool CorrectReads::searchError(bool* error_exist)
 			i = endPos;
 		}
 		
-		i += 1;
+		//i += 1;
 	}
 
 	#ifdef PRINT_DEBUG
@@ -1489,14 +1374,7 @@ int CorrectReads::startCorrectionInZone(int startPos, int endPos)
 
 
 
-/*********************************************************************
- ** METHOD  :
- ** PURPOSE :
- ** INPUT   :
- ** OUTPUT  :
- ** RETURN  :
- ** REMARKS :
- *********************************************************************/
+//not needed if execute2 is used
 void CorrectReads::update_nb_errors_corrected(int nb_errors_corrected){
     _local_nb_errors_corrected += nb_errors_corrected;
     if(nb_errors_corrected > 0){
