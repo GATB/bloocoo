@@ -500,7 +500,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     
     //<<<<<<< Updated upstream
     /** We instantiate the bloom object. */
-    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(STR_NB_CORES));
+    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CACHE,getInput()->getInt(STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build (itKmers);
     //=======
     //    /** We instantiate the bloom object. */
