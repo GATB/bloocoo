@@ -219,11 +219,10 @@ class CorrectReads
 		
 		
 		//ion correction
-		kmer_type _last_wrong_kmer;
-		int _pos_homopo;
-	
-		void ionCorrection(int ii);
-		void ionCorrection2(int ii, kmer_type current_kmer, int untrusted_zone_size);
+		//kmer_type _last_wrong_kmer;
+		//int _pos_homopo;
+		//void ionCorrection(int ii);
+		//void ionCorrection2(int ii, kmer_type current_kmer, int untrusted_zone_size);
 		
 		
 		
@@ -232,6 +231,8 @@ class CorrectReads
 		bool searchError(bool* error_exist);
 		int searchErrorZoneRec(int pos, bool extendRight, int trustedKmerCount);
 		int startCorrectionInZone(int startPos, int endPos);
+		
+		void executeIonCorrection();
 		
 
 		

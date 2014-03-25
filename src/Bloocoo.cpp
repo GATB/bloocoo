@@ -500,7 +500,8 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     
     //<<<<<<< Updated upstream
     /** We instantiate the bloom object. */
-    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CACHE,getInput()->getInt(STR_NB_CORES));
+    //BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CACHE,getInput()->getInt(STR_NB_CORES));
+    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(STR_NB_CORES));
     Bloom<kmer_type>* bloom = builder.build (itKmers);
     //=======
     //    /** We instantiate the bloom object. */
@@ -651,11 +652,16 @@ void CorrectReads::operator()(Sequence& sequence){
 	_nb_kmer_offset = -2;
 	_use_newSeq = false;
 	
-	execute2();
+	if(_bloocoo->_ion_mode){
+		executeIonCorrection();
+	}
+	else{
+		execute2();
+	}
 }
 
-
-        
+/*
+//Not used anymore
 void CorrectReads::execute(){
 	
 	int nb_tries =0;
@@ -878,7 +884,7 @@ void CorrectReads::execute(){
 	
 	writeSequence();
 	
-	/*
+	
 	if(_bloocoo->_ion_mode   )
 	{
 //            if(! _newSeq)
@@ -939,9 +945,9 @@ void CorrectReads::execute(){
 	//    printf("%s\n",_readseq);
 	
 	// _bloocoo->_seq_num++; //counter 0 based, not thread-safe  //todo : include the sequence number in the sequence type
-	*/
+	
 }
-
+*/
 
 
 
@@ -954,9 +960,6 @@ void CorrectReads::execute2(){
 	KmerModel::Iterator itKmer (model);
 	bool error_exist;
 	
-	_pos_homopo = 0;
-	_last_wrong_kmer = 0;
-	
 	for(int j=0; j<_nb_less_restrictive_correction; j++){
 		_nb_kmer_offset += 2;
 		
@@ -966,16 +969,7 @@ void CorrectReads::execute2(){
 			
 			nb_tries += 1; //a remttre à zero avant ce while ? plus lent mais sinon peut shunter les less_restrictive_correction
 			
-			if(_bloocoo->_ion_mode){
-				itKmer.setData (_sequence->getData());
-				_readSize = _sequence->getDataSize();
-				_pos_homopo = 0;
-			   // printf("current seq size %i \n",_readSize);
-			}
-			else{
-				itKmer.setData (_sequence->getData());
-			}
-			
+			itKmer.setData (_sequence->getData());
 			//itKmer.setData(_sequence->getData());
 			//int i = 0;
 			
@@ -2385,214 +2379,380 @@ void Bloocoo::print_read_if_not_fully_corrected(KmerModel* model, Sequence& s){
 
 
 
+void CorrectReads::executeIonCorrection(){
+	
+	int nb_tries =0;
+	
+	
+	
+	int nb_checked;
+	KmerModel model (_kmerSize,KMER_DIRECT);
+	KmerModel::Iterator itKmer (model);
+	kmer_type current_kmer;
+	kmer_type current_kmer_min;
+	kmer_type last_wrong_kmer;
+	int pos_homopo = 0;
+	
 
-
-
-
-
-
-
-
-
-
-
-
-void CorrectReads::ionCorrection(int ii){
-	//printf("pos 2 _pos_homopo %i \n",_pos_homopo);
-	//todo put this in outside func
-
-	int insert_pos =ii-2;
-	int dele_pos= ii-1;
-
-	if(_pos_homopo==1 && insert_pos >=5) // todo :le prob des bouts
-	{
+	
+	for(int j=0; j<_nb_less_restrictive_correction; j++){
+		_nb_kmer_offset += 2;
 		
-		kmer_type corrected_kmer = _last_wrong_kmer;
-		//il faut faire confirmation avec kmer solid qd meme ... sinon boucle insert/dele et rapetisse read
-		#ifdef DEBION
-			printf("insert M %i lenm %i rl %i\n",ii-2,_readSize-(ii-2)-1,_readSize);
-		#endif
-	   // std::cout << " last wrong kmer    " << _last_wrong_kmer.toString(_kmerSize) << std::endl;
-		//il faut rtempalcer premiere nt par celle davant
 		
-		int ins_size = 1;
-
-		for(ins_size = 1; ins_size<=3;ins_size ++ )
+		int nb_kmer_trusted = 0;
+		_continue_correction = true;
+		bool first_gap = true;
+		int ii=0;
+		
+		
+		while(_continue_correction && nb_tries <5)
 		{
-			corrected_kmer = _last_wrong_kmer;
-			mutate_kmer(&corrected_kmer, _kmerSize-1, NT2int(_readseq[ii-2-ins_size]));
-		 //   if((ii-2-ins_size)>=_sequence->getDataSize()  || (ii-2-ins_size) < 0 )
-		  //      printf("PB %i %i %i get %i   kk %i \n",insert_pos,ins_size,_readSize,_sequence->getDataSize(),ii-2-ins_size);
+			nb_tries ++;
+			nb_kmer_trusted = 0;
+			_continue_correction = false;
+			first_gap = true;
+			ii = 0;
 			
-		//    std::cout << "try corrected kmer    " << corrected_kmer.toString(_kmerSize)  <<" ins size" << ins_size << std::endl;
-
-			if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
+			itKmer.setData (_sequence->getData());
+			_readSize = _sequence->getDataSize();
+			
+#ifdef DEBION
+			 printf("%.*s   %i  \n",(int)_sequence->getDataSize(),_sequence->getDataBuffer(),_sequence->getIndex());
+#endif
+			int untrusted_zone_size = 0;
+			int trusted_zone_size = 0;
+			int real_untrusted_zone_size = 0;
+			
+			//Mettre en dehors du while dans une version final (attention dangereux), faire gaffe a ne jamais utiliser un kmer de ce tableau
+			//avec un indice > ii
+			//int ks = _readSize-_kmerSize+1;
+			//if (ks <= 0) ks =10;
+			//kmer_type* kmers[ks]; // there was a bug with [_readSize-_kmerSize+1], array should always be init with >0 size
+			_kmers.clear();
+			
+			
+			//if(PRINT_DEBUG){ _bloocoo->print_read_correction_state(&model, _sequence);}
+			
+			// getSynchro()->lock()  ;
+			pos_homopo=0;
+			
+			// We iterate the kmers of this sequence
+			for (itKmer.first(); !itKmer.isDone(); itKmer.next(),ii++)
 			{
-
-				memmove(_readseq+insert_pos + 1 - ins_size , _readseq + insert_pos + 1, _readSize-(insert_pos)-1);
-				_continue_correction = true;
-				_sequence->getData().setSize(_readSize-ins_size);
-				_local_nb_ins_corrected += ins_size;
-				#ifdef DEBION
-					printf("mm %i %i  %i\n",+insert_pos + 1 - ins_size ,  + insert_pos + 1, _readSize-(insert_pos)-1);
-					printf("apply correc insert len %i pos %i \n",ins_size,insert_pos);
-				#endif
-
-				break;
 				
-			}
-		}
-
-
-	}
-	else if (_pos_homopo==2 && dele_pos >=5) // todo :le prob des bouts
-	{
-		kmer_type corrected_kmer = _last_wrong_kmer;
-
-		#ifdef DEBION
-			//   printf("possible deletion in read  at pos %i  len %i  _readSize %i \n",ii-1,_readSize-(ii-1)-1,_readSize);
-			printf("dele M %i lenm %i rl %i\n",ii-1,_readSize-(ii-1)-1,_readSize);
-			//  printf("%c %c \n",_readseq[dele_pos],_readseq[dele_pos-1]);
-			//  std::cout << " last wrong kmer    " << _last_wrong_kmer.toString(_kmerSize) << std::endl;
-		#endif
-
-		
-		int del_size = 1;
-		
-		for(del_size = 1; del_size<=3;del_size ++ )
-		{
-			corrected_kmer = _last_wrong_kmer;
-			corrected_kmer = corrected_kmer >> (2*del_size);
-			mutate_kmer(&corrected_kmer, _kmerSize-1, NT2int(_readseq[dele_pos-1]));
-			for(int hh=0; hh<del_size; hh++)
-			{
-				mutate_kmer(&corrected_kmer, _kmerSize-2-hh, NT2int(_readseq[dele_pos]));
-			}
-		 //   std::cout << "try corrected kmer    " << corrected_kmer.toString(_kmerSize) <<" del size" << del_size<<   std::endl;
-			
-			
-			if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
-			{
-				memmove(_readseq+dele_pos+del_size,_readseq+dele_pos,_readSize-dele_pos-del_size);
-				_continue_correction = true;
-				_sequence->getData().setSize(_readSize);
-				_local_nb_del_corrected += del_size;
-				#ifdef DEBION
-					printf("mm %i %i  %i\n",dele_pos+del_size ,  + dele_pos, _readSize-dele_pos-del_size);
-					printf("apply correc del len %i pos %i \n",del_size,dele_pos);
-				#endif
-				break;
 				
-			}
-			
-		}
-
-	}
-}
-
-void CorrectReads::ionCorrection2(int ii, kmer_type current_kmer, int untrusted_zone_size){
-	_pos_homopo=contains_homopolymer(current_kmer,_kmerSize);
-	//if (pos_homopo)
-	//{
-	//	std::cout << "    " << current_kmer.toString(_kmerSize)<< "  " << _pos_homopo << " " << ii<< std::endl;
-	//}
-
-
-	if(untrusted_zone_size==1)//first wrong kmer
-	{
-		_pos_homopo=contains_homopolymer( revcomp(current_kmer, _kmerSize),_kmerSize);
-		
-		kmer_type wrong_kmer = revcomp(current_kmer, _kmerSize);
-
-	 //   std::cout << "  wrong kmer    " << wrong_kmer.toString(_kmerSize) << std::endl;
-
-		kmer_type corrected_kmer;
-		
-		//printf("frist wrong kmer homopo %i pos %i\n",_pos_homopo,ii+_kmerSize-1);
-		int insert_pos = ii+_kmerSize-1;
-		int delete_pos = ii+_kmerSize-2;
-
-		if(_pos_homopo==1 &&  insert_pos >  (_readSize-_kmerSize) ) //&& insert_pos < _readSize-5
-		{
-		   //   printf("insert F  %i lenm %i rl %i\n",insert_pos,_readSize-(insert_pos)-1,_readSize);
-
-			
-			int ins_size = 1;
-			
-			for(ins_size = 1; ins_size<=3;ins_size ++ )
-			{
-				corrected_kmer = wrong_kmer;
-				mutate_kmer(&corrected_kmer, _kmerSize-1, binrev[NT2int(_readseq[insert_pos+ins_size])]);
-			//     std::cout << " corrected kmer    " << corrected_kmer.toString(_kmerSize) << std::endl;
 				
-				if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
+				
+				int nb_errors_cor = 0;
+				
+				current_kmer = *itKmer;
+				//kmers[ii] = &(*itKmer);
+				_kmers.push_back(current_kmer);
+				
+				current_kmer_min = min(revcomp(current_kmer, _kmerSize), current_kmer);
+				
+				
+				
+				//Si on veut checker le dernier kmer du read et qu'on est dans une zone untrusted alors on considere
+				//automatiquement ce dernier kmer comme untrusted et on laisse les démarches de correction de fin de read s'effectuer.
+				bool is_last_kmer_indexed_after_hole = (ii==_readSize-_kmerSize && trusted_zone_size==0);
+				
+				
+				if (!is_last_kmer_indexed_after_hole && _bloom->contains(current_kmer_min)) //kmer is solid
 				{
-				memmove(_readseq+insert_pos+1-ins_size, _readseq+insert_pos+1, _readSize-(insert_pos)-1);
-				_continue_correction = true;
-				_sequence->getData().setSize(_readSize-ins_size);
-				_local_nb_ins_corrected += ins_size;
-				//    printf("apply correc ins F  len %i pos %i\n",ins_size,insert_pos);
-
-				break;
-				}
-				
-			}
-
-		}
-		
-		if(_pos_homopo==2 &&  delete_pos >  (_readSize-_kmerSize) && delete_pos < _readSize-5) //ne gere pas la toute fin // todo :le prob des bouts
-		{
-
-			#ifdef DEBION
-				printf("dele  F  %i lenm %i  rl %i\n",delete_pos,_readSize-delete_pos-1,_readSize);
-			#endif
-			
-			int del_size = 1;
-
-			for(del_size = 1; del_size<=3;del_size ++ )
-			{
-				corrected_kmer = wrong_kmer;
-				//std::cout << " corrected kmer  oo  " << corrected_kmer.toString(_kmerSize)  <<  std::endl;
-
-				//create the correcetd kmer
-				corrected_kmer = corrected_kmer >> (2*del_size);
-				mutate_kmer(&corrected_kmer, _kmerSize-1, binrev[NT2int(_readseq[delete_pos+1])]);
-				for(int hh=0; hh<del_size; hh++)
-				{
-					mutate_kmer(&corrected_kmer, _kmerSize-2-hh, binrev[NT2int(_readseq[delete_pos])]);
-				}
-				#ifdef DEBION
-					std::cout << "try corrected kmer    " << corrected_kmer.toString(_kmerSize) <<" del size" << del_size<<   std::endl;
-				#endif
-				//check it exists, if yes correct read
-				if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
-				{
-					#ifdef DEBION
-						printf("apply coorec dele F  len %i pos %i\n",del_size,delete_pos);
-						printf("%i %i %i\n",+delete_pos+del_size,delete_pos,_readSize-delete_pos-del_size);
-						printf("old read\n%.*s\n",_readSize,_readseq);
-					#endif
-					memmove(_readseq+delete_pos+del_size,_readseq+delete_pos,_readSize-delete_pos-del_size);
-					for(int hh=0; hh<del_size; hh++)
+					
+					nb_kmer_trusted += 1;
+					
+					trusted_zone_size += 1;
+					
+					//beginning of indexed zone
+					if(trusted_zone_size == 2)
 					{
-						_readseq[delete_pos+1+hh]= _readseq[delete_pos] ;
-						#ifdef DEBION
-							printf("setting nt %i %c pos %i\n",NT2int(_readseq[delete_pos]),(_readseq[delete_pos]),delete_pos);
-						#endif
+						//printf("pos 2 pos_homopo %i \n",pos_homopo);
+						//todo put this in outside func
+						int insert_pos =ii-2;
+						int dele_pos= ii-1;
+
+						if(pos_homopo==1 && insert_pos >=5) // todo :le prob des bouts
+						{
+							
+							kmer_type corrected_kmer = last_wrong_kmer;
+							//il faut faire confirmation avec kmer solid qd meme ... sinon boucle insert/dele et rapetisse read
+							#ifdef DEBION
+							printf("insert M %i lenm %i rl %i\n",ii-2,_readSize-(ii-2)-1,_readSize);
+#endif
+						   // std::cout << " last wrong kmer    " << last_wrong_kmer.toString(_kmerSize) << std::endl;
+							//il faut rtempalcer premiere nt par celle davant
+							
+							int ins_size = 1;
+
+							for(ins_size = 1; ins_size<=3;ins_size ++ )
+							{
+								corrected_kmer = last_wrong_kmer;
+								mutate_kmer(&corrected_kmer, _kmerSize-1, NT2int(_readseq[ii-2-ins_size]));
+							 //   if((ii-2-ins_size)>=_sequence->getDataSize()  || (ii-2-ins_size) < 0 )
+							  //      printf("PB %i %i %i get %i   kk %i \n",insert_pos,ins_size,_readSize,_sequence->getDataSize(),ii-2-ins_size);
+								
+							//    std::cout << "try corrected kmer    " << corrected_kmer.toString(_kmerSize)  <<" ins size" << ins_size << std::endl;
+
+								if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
+								{
+
+									memmove(_readseq+insert_pos + 1 - ins_size , _readseq + insert_pos + 1, _readSize-(insert_pos)-1);
+									_continue_correction = true;
+									_sequence->getData().setSize(_readSize-ins_size);
+									_local_nb_ins_corrected += ins_size;
+#ifdef DEBION
+									printf("mm %i %i  %i\n",+insert_pos + 1 - ins_size ,  + insert_pos + 1, _readSize-(insert_pos)-1);
+
+									printf("apply correc insert len %i pos %i \n",ins_size,insert_pos);
+#endif
+
+									break;
+									
+								}
+							}
+
+
+						}
+						else if (pos_homopo==2 && dele_pos >=5) // todo :le prob des bouts
+						{
+							kmer_type corrected_kmer = last_wrong_kmer;
+
+						 //   printf("possible deletion in read  at pos %i  len %i  _readSize %i \n",ii-1,_readSize-(ii-1)-1,_readSize);
+#ifdef DEBION
+
+							printf("dele M %i lenm %i rl %i\n",ii-1,_readSize-(ii-1)-1,_readSize);
+						  //  printf("%c %c \n",_readseq[dele_pos],_readseq[dele_pos-1]);
+						  //  std::cout << " last wrong kmer    " << last_wrong_kmer.toString(_kmerSize) << std::endl;
+#endif
+
+							
+							int del_size = 1;
+							
+							for(del_size = 1; del_size<=3;del_size ++ )
+							{
+								corrected_kmer = last_wrong_kmer;
+								corrected_kmer = corrected_kmer >> (2*del_size);
+								mutate_kmer(&corrected_kmer, _kmerSize-1, NT2int(_readseq[dele_pos-1]));
+								for(int hh=0; hh<del_size; hh++)
+								{
+									mutate_kmer(&corrected_kmer, _kmerSize-2-hh, NT2int(_readseq[dele_pos]));
+								}
+							 //   std::cout << "try corrected kmer    " << corrected_kmer.toString(_kmerSize) <<" del size" << del_size<<   std::endl;
+								
+								
+								if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
+								{
+									memmove(_readseq+dele_pos+del_size,_readseq+dele_pos,_readSize-dele_pos-del_size);
+									_continue_correction = true;
+									_sequence->getData().setSize(_readSize);
+									_local_nb_del_corrected += del_size;
+#ifdef DEBION
+									printf("mm %i %i  %i\n",dele_pos+del_size ,  + dele_pos, _readSize-dele_pos-del_size);
+
+									printf("apply correc del len %i pos %i \n",del_size,dele_pos);
+#endif
+									break;
+									
+								}
+								
+							}
+
+						}
+						if (_continue_correction) break;
+						
 					}
-					#ifdef DEBION
-						printf("new read %.*s\n",_readSize,_readseq);
-					#endif
-					_continue_correction = true;
-					_sequence->getData().setSize(_readSize);
-					_local_nb_del_corrected += del_size;
-					break;
-
+					
+					if(trusted_zone_size==2){
+						first_gap = false;
+					}
+					
+					////////////traitement d'un faux positif du bloom isolé
+					//   if(trusted_zone_size==1) tai_previous_break = untrusted_zone_size; // begin of indexed zone    ( if untrusted_zone_size ?)
+					if (trusted_zone_size > 1) // do not reset  untrusted_zone_size if a single positive (might be a FP)
+					{
+						untrusted_zone_size = 0; //reset previous hole size
+					}
+					if (trusted_zone_size==1)// begin of indexed zone
+					{
+						untrusted_zone_size++; //  treat a single solidkmer  as an erroneous kmer
+					}
+					//////////
+					
+					//version sans traitement du FP du bloom
+					//if(trusted_zone_size==1){
+					//	untrusted_zone_size = 0;
+					//}
+					
 				}
-			}
+				else //kmer contains an error
+				{
+					untrusted_zone_size += 1;
+					trusted_zone_size = 0;
+					
+					last_wrong_kmer = current_kmer;
+					
+					//todo put this in outside func
+					pos_homopo=contains_homopolymer(current_kmer,_kmerSize);
+					//
+//                            if (pos_homopo)
+//                            {
+//                                std::cout << "    " << current_kmer.toString(_kmerSize)<< "  " << pos_homopo << " " << ii<< std::endl;
+//                            }
 
+					
+					if(untrusted_zone_size==1)//first wrong kmer
+					{
+						pos_homopo=contains_homopolymer( revcomp(current_kmer, _kmerSize),_kmerSize);
+						
+						kmer_type wrong_kmer = revcomp(current_kmer, _kmerSize);
+
+					 //   std::cout << "  wrong kmer    " << wrong_kmer.toString(_kmerSize) << std::endl;
+
+						kmer_type corrected_kmer;
+						
+						//printf("frist wrong kmer homopo %i pos %i\n",pos_homopo,ii+_kmerSize-1);
+						int insert_pos = ii+_kmerSize-1;
+						int delete_pos = ii+_kmerSize-2;
+
+						if(pos_homopo==1 &&  insert_pos >  (_readSize-_kmerSize) ) //&& insert_pos < _readSize-5
+						{
+						   //   printf("insert F  %i lenm %i rl %i\n",insert_pos,_readSize-(insert_pos)-1,_readSize);
+
+							
+							int ins_size = 1;
+							
+							for(ins_size = 1; ins_size<=3;ins_size ++ )
+							{
+								corrected_kmer = wrong_kmer;
+								mutate_kmer(&corrected_kmer, _kmerSize-1, binrev[NT2int(_readseq[insert_pos+ins_size])]);
+							//     std::cout << " corrected kmer    " << corrected_kmer.toString(_kmerSize) << std::endl;
+								
+								if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
+								{
+								memmove(_readseq+insert_pos+1-ins_size, _readseq+insert_pos+1, _readSize-(insert_pos)-1);
+								_continue_correction = true;
+								_sequence->getData().setSize(_readSize-ins_size);
+								_local_nb_ins_corrected += ins_size;
+								//    printf("apply correc ins F  len %i pos %i\n",ins_size,insert_pos);
+
+								break;
+								}
+								
+							}
+
+						}
+						
+						if(pos_homopo==2 &&  delete_pos >  (_readSize-_kmerSize) && delete_pos < _readSize-5) //ne gere pas la toute fin // todo :le prob des bouts
+						{
+
+#ifdef DEBION
+							printf("dele  F  %i lenm %i  rl %i\n",delete_pos,_readSize-delete_pos-1,_readSize);
+#endif
+							
+							int del_size = 1;
+
+							for(del_size = 1; del_size<=3;del_size ++ )
+							{
+								corrected_kmer = wrong_kmer;
+								//std::cout << " corrected kmer  oo  " << corrected_kmer.toString(_kmerSize)  <<  std::endl;
+
+								//create the correcetd kmer
+								corrected_kmer = corrected_kmer >> (2*del_size);
+								mutate_kmer(&corrected_kmer, _kmerSize-1, binrev[NT2int(_readseq[delete_pos+1])]);
+								for(int hh=0; hh<del_size; hh++)
+								{
+									mutate_kmer(&corrected_kmer, _kmerSize-2-hh, binrev[NT2int(_readseq[delete_pos])]);
+								}
+#ifdef DEBION
+								std::cout << "try corrected kmer    " << corrected_kmer.toString(_kmerSize) <<" del size" << del_size<<   std::endl;
+#endif
+								//check it exists, if yes correct read
+								if (_bloom->contains(min(revcomp(corrected_kmer, _kmerSize), corrected_kmer)))
+								{
+#ifdef DEBION
+
+									printf("apply coorec dele F  len %i pos %i\n",del_size,delete_pos);
+									printf("%i %i %i\n",+delete_pos+del_size,delete_pos,_readSize-delete_pos-del_size);
+									printf("old read\n%.*s\n",_readSize,_readseq);
+#endif
+									memmove(_readseq+delete_pos+del_size,_readseq+delete_pos,_readSize-delete_pos-del_size);
+									for(int hh=0; hh<del_size; hh++)
+									{
+										_readseq[delete_pos+1+hh]= _readseq[delete_pos] ;
+#ifdef DEBION
+										printf("setting nt %i %c pos %i\n",NT2int(_readseq[delete_pos]),(_readseq[delete_pos]),delete_pos);
+#endif
+									}
+#ifdef DEBION
+
+									printf("new read %.*s\n",_readSize,_readseq);
+#endif
+									_continue_correction = true;
+									_sequence->getData().setSize(_readSize);
+									_local_nb_del_corrected += del_size;
+									break;
+
+								}
+							}
+
+							
+						}
+						
+
+						
+						
+					}
+					if (_continue_correction) break;
+
+					
+				}
+				
+				update_nb_errors_corrected(nb_errors_cor);
+				
+			} // end of kmers iteration over the read
+			
 			
 		}
 		
+		if(nb_kmer_trusted == _readSize-_kmerSize+1){
+			break;
+		}
 	}
+	
+	
+//            if(! _newSeq)
+//            {
+//                _newSeq =  &_readseq ; //new Sequence (_readseq);
+//            }
+		
+//            if(_use_newSeq)
+//            {
+//                _newSeq->setComment(_sequence->getComment());
+//                _newSeq->setIndex(_sequence->getIndex());
+//            }
+   // printf("fin\n%i %.*s   %i  \n",(int)_newSeq->getDataSize(),(int)_newSeq->getDataSize(),_newSeq->getDataBuffer(),_newSeq->getIndex());
+
+	
+	
+	Sequence * outseq;
+//            if(_use_newSeq)
+//                outseq = _newSeq;
+//            else
+		outseq =  _sequence ;
+	
+	#ifdef SERIAL
+			_outbank->insert (*outseq); //output corrected sequence
+	#else
+			_bankwriter->insert (*outseq);//
+			_temp_nb_seq_done ++;
+			
+			if(_temp_nb_seq_done == 10000) // careful with this val, should be a divisor of buffer size in ordered bank
+			{
+				_bankwriter->incDone(_temp_nb_seq_done);
+				_temp_nb_seq_done=0;
+			}
+	#endif
+	
 }
