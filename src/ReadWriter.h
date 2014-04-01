@@ -65,7 +65,7 @@ void * writer(void * args);
 
 
 
-class OrderedBankWriter
+class OrderedBankWriter : public SmartPointer
 {
 public:
     

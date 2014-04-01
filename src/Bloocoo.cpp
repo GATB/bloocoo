@@ -208,7 +208,7 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
 
     /** We get an OptionsParser for DSK. */
     OptionsParser parserDSK = DSK::getOptionsParser();
-    getParser()->add (parserDSK);
+    getParser()->push_back (parserDSK);
 
     /** We add options specific to this tool. */
     getParser()->push_back(new OptionOneParam(STR_URI_OUTPUT, "output file", false));
@@ -294,7 +294,7 @@ void Bloocoo::execute ()
     /*************************************************/
     Iterator<Sequence>* itSeq = createIterator<Sequence> (
                                                           inbank.iterator(),
-                                                          inbank.estimateNbSequences(),
+                                                          inbank.estimateNbItems(),
                                                           "Iterating and correcting sequences"
                                                           );
     LOCAL (itSeq);
@@ -331,7 +331,7 @@ void Bloocoo::execute ()
     BankFasta outbank (outputFilename, fastq_mode,gz_mode);
     
     
-    BagCache<Sequence> *  outbank_cache = new BagCache<Sequence> (&outbank,10000);
+    //BagCache<Sequence> *  outbank_cache = new BagCache<Sequence> (&outbank,10000);
     
     u_int64_t total_nb_errors_corrected = 0;
     u_int64_t total_nb_ins_corrected = 0;
@@ -485,42 +485,39 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     float NBITS_PER_KMER = log (16*_kmerSize*(lg2*lg2))/(lg2*lg2);
     NBITS_PER_KMER = 12;
     printf("NBITS per kmer %f \n",NBITS_PER_KMER);
-    u_int64_t solidFileSize = (System::file().getSize(_solidFile) / sizeof (kmer_type));
+
+    /** We retrieve the solid kmers from the storage content (likely built by DSK). */
+    Storage* storage = StorageFactory(DSK::getStorageMode()).create (_solidFile, false, false);
+    LOCAL (storage);
+
+    /** We retrieve the solid collection from the storage. */
+    Collection<kmer_count>& solidCollection = storage->root().getGroup("dsk").getCollection<kmer_count> ("solid");
+
+    /** We get the number of solid kmers. */
+    u_int64_t solidFileSize = solidCollection.getNbItems();
     
     u_int64_t estimatedBloomSize = (u_int64_t) ((double)solidFileSize * NBITS_PER_KMER);
     if (estimatedBloomSize ==0 ) { estimatedBloomSize = 1000; }
     
     /** We create the kmers iterator from the solid file. */
     Iterator<kmer_count>* itKmers = createIterator<kmer_count> (
-                                                                new IteratorFile<kmer_count> (_solidFile),
-                                                                solidFileSize,
-                                                                "fill bloom filter"
-                                                                );
+        solidCollection.iterator(),
+        solidFileSize,
+        "fill bloom filter"
+    );
     LOCAL (itKmers);
     
-    //<<<<<<< Updated upstream
     /** We instantiate the bloom object. */
-    //BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CACHE,getInput()->getInt(STR_NB_CORES));
-    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(STR_NB_CORES));
-    Bloom<kmer_type>* bloom = builder.build (itKmers);
-    //=======
-    //    /** We instantiate the bloom object. */
-    //    BloomBuilder<kmer_type> builder (itKmers, estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CacheCoherent,getInput()->getInt(Tool::STR_NB_CORES));
-    //    Bloom<kmer_type>* bloom = builder.build ();
-    //>>>>>>> Stashed changes
+    IProperties* stats = new Properties();  LOCAL (stats);
+    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CACHE,getInput()->getInt(STR_NB_CORES));
+    Bloom<kmer_type>* bloom = builder.build (itKmers, stats);
     
+    getInfo()->add (1, "bloom");
+    getInfo()->add (2, stats);
+
     /** We return the created bloom filter. */
     return bloom;
 }
-
-
-
-
-
-
-
-
-
 
 
 /********************************************************************************/
@@ -532,15 +529,18 @@ CorrectReads::CorrectReads(Bloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloo
 : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
 _total_nb_errors_corrected (nb_errors_corrected),_total_nb_ins_corrected (nb_ins_corrected),
 _total_nb_del_corrected (nb_del_corrected),_local_nb_errors_corrected(0),
-_synchro(System::thread().newSynchronizer()),_temp_nb_seq_done(0), _nb_living(nbliving)
+_synchro(0),_temp_nb_seq_done(0), _nb_living(nbliving), _bankwriter(0)
 {
-	_bankwriter = new OrderedBankWriter(outbank,nb_cores*10000);
+	setBankWriter (new OrderedBankWriter(outbank,nb_cores*10000));
+
 	_thread_id = __sync_fetch_and_add (_nb_living, 1);
 	_local_nb_ins_corrected =0;
 	_local_nb_del_corrected =0;
 	_tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
    //   printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
 	
+	setSynchro (System::thread().newSynchronizer());
+
 	_nb_less_restrictive_correction = _bloocoo->_nb_less_restrictive_correction;
     _max_multimutation_distance = _bloocoo->_max_multimutation_distance;
     _only_decrease_nb_min_valid = _bloocoo->_only_decrease_nb_min_valid; // false = descend les 2, recall plus faible
@@ -563,14 +563,18 @@ _synchro(System::thread().newSynchronizer()),_temp_nb_seq_done(0), _nb_living(nb
 
 //copy construct
 CorrectReads::CorrectReads(const CorrectReads& cr) //called by dispatcher iterate to create N functors
+    : _synchro(0), _bankwriter(0)
 {
 	//functors share smee bloom, bankwriter, bloocoo and synchronizer
 	_bloom = cr._bloom;
 	_outbank = cr._outbank;
 	_bloocoo = cr._bloocoo;
-	_synchro = cr._synchro;
-	_bankwriter = cr._bankwriter;
 	_nb_living = cr._nb_living;
+
+	/** We share the synchronizer and the bank writer (both SmartPointers) between the different instances of CorrectReads. */
+	setSynchro    (cr._synchro);
+    setBankWriter (cr._bankwriter);
+
 	_newSeq = 0;
 	_tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
 	
@@ -635,8 +639,12 @@ CorrectReads::~CorrectReads ()
 		}
 	#endif
 	
-	//   free(_tab_multivote); // pourquoi plante ? lobjet correct read est il copié qq part ?
-	
+	if (_tab_multivote) { free(_tab_multivote); } // pourquoi plante ? lobjet correct read est il copié qq part ?
+	if (_newSeq)        { delete _newSeq;       }
+
+	/** We release one token of the smart pointers. */
+	setSynchro    (0);
+    setBankWriter (0);
 }
 
 //no const otherwise error with tKmer.setData
@@ -1345,28 +1353,6 @@ int CorrectReads::startCorrectionInZone(int startPos, int endPos)
 	return nb_errors_cor;
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //not needed if execute2 is used
 void CorrectReads::update_nb_errors_corrected(int nb_errors_corrected){

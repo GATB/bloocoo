@@ -149,6 +149,7 @@ class CorrectReads
 		Sequence * _newSeq; //used for indel correction
 
 		OrderedBankWriter * _bankwriter;
+		void setBankWriter (OrderedBankWriter* bankwriter) { SP_SETATTR(bankwriter); }
 		
 		Sequence* _sequence;
 		char* _readseq;
@@ -172,6 +173,7 @@ class CorrectReads
 		// KmerModel::Iterator itKmer;
 
 		ISynchronizer* _synchro;
+		void setSynchro (ISynchronizer* synchro)  { SP_SETATTR(synchro); }
 		ISynchronizer* getSynchro ()  { return _synchro; }
 
 		u_int64_t *  _total_nb_errors_corrected;
