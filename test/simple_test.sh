@@ -17,9 +17,6 @@ else
     exit 1
 fi
 
-rm errm_bloocoo_corr_errs.tab errm_corrected.fasta
-
-
 
 echo -n "Testing isolated error, left side"
 
@@ -37,11 +34,6 @@ else
     echo  FAILED
     exit 1
 fi
-
-rm errleft_bloocoo_corr_errs.tab errleft_corrected.fasta
-
-
-
 
 
 
@@ -62,8 +54,6 @@ echo  FAILED
 exit 1
 fi
 
-rm errright_bloocoo_corr_errs.tab errright_corrected.fasta
-
 
 echo -n "Testing two close errors"
 
@@ -82,9 +72,7 @@ echo  FAILED
 exit 1
 fi
 
-rm errclose_bloocoo_corr_errs.tab errclose_corrected.fasta
-
-
-
+# SOME CLEANUP
+rm  *_corrected.fasta  *.tab  *.h5
 
 exit 0

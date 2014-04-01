@@ -18,9 +18,9 @@ echo  FAILED
 exit 1
 fi
 
-rm errclose_bloocoo_corr_errs.tab errclose_corrected.fasta  
 
-
+# SOME CLEANUP
+rm  *_corrected.fasta  *.tab  *.h5
 
 
 exit 0

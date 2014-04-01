@@ -18,8 +18,6 @@ else
     exit 1
 fi
 
-rm errins_corrected.fasta
-
 
 echo -n "Testing deletion error, middle of read"
 
@@ -37,8 +35,6 @@ else
     echo  FAILED
     exit 1
 fi
-
-rm errdel_corrected.fasta
 
 
 
@@ -59,9 +55,6 @@ else
     exit 1
 fi
 
-rm err2ins_corrected.fasta
-
-
 
 echo -n "Testing 2nt-deletion error, middle of read"
 
@@ -79,8 +72,6 @@ else
     echo  FAILED
     exit 1
 fi
-
-rm err2del_corrected.fasta
 
 
 echo -n "Testing insertion error, end of read"
@@ -100,9 +91,6 @@ else
     exit 1
 fi
 
-rm errinsfin_corrected.fasta
-
-
 
 echo -n "Testing deletion error, end of read"
 
@@ -120,9 +108,6 @@ else
     echo  FAILED
     exit 1
 fi
-
-rm errdelfin_corrected.fasta
-
 
 
 echo -n "Testing 2-nt deletion error, end of read"
@@ -142,9 +127,6 @@ else
     exit 1
 fi
 
-rm err2delfin_corrected.fasta
-
-
 
 echo -n "Testing 2-nt insertion error, end of read"
 
@@ -163,10 +145,8 @@ else
     exit 1
 fi
 
-rm err2insfin_corrected.fasta
 
-
-
-
+# SOME CLEANUP
+rm  *_corrected.fasta  *.tab  *.h5
 
 exit 0
