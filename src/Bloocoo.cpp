@@ -655,6 +655,11 @@ void CorrectReads::operator()(Sequence& sequence){
 	_readSize = _sequence->getDataSize();
 	_kmerCount = _readSize - _kmerSize + 1;
 	
+	if(_readSize <= _kmerSize){
+		writeSequence();
+		return;
+	}
+	
 	_corrected_pos.clear();
 	_kmers.clear();
 	_nb_kmer_offset = -2;
@@ -666,6 +671,8 @@ void CorrectReads::operator()(Sequence& sequence){
 	else{
 		execute2();
 	}
+	
+	writeSequence();
 }
 
 /*
@@ -1018,7 +1025,6 @@ void CorrectReads::execute2(){
 		trimSequence();
 	}
 	
-	writeSequence();
 
 }
 
