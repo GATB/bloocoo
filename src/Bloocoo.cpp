@@ -532,12 +532,11 @@ _total_nb_del_corrected (nb_del_corrected),_local_nb_errors_corrected(0),
 _synchro(0),_temp_nb_seq_done(0), _nb_living(nbliving), _bankwriter(0)
 {
 	setBankWriter (new OrderedBankWriter(outbank,nb_cores*10000));
-
 	_thread_id = __sync_fetch_and_add (_nb_living, 1);
 	_local_nb_ins_corrected =0;
 	_local_nb_del_corrected =0;
 	_tab_multivote = (unsigned char *) malloc(TAB_MULTIVOTE_SIZE*sizeof(unsigned char)); // pair of muta  = 16 nt *128 pos * 16 (max dist)
-   //   printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
+     // printf("------- CorrectReads Custom Constructor  %p --------- tid %i \n",this,_thread_id);
 	
 	setSynchro (System::thread().newSynchronizer());
 
@@ -612,8 +611,8 @@ CorrectReads::CorrectReads(const CorrectReads& cr) //called by dispatcher iterat
 
 CorrectReads::~CorrectReads ()
 {
-	//  printf("------- CorrectReads Destructor  %p --------- tid %i \n",this,_thread_id);
-	
+	 // printf("------- CorrectReads Destructor  %p --------- tid %i \n",this,_thread_id);
+ getSynchro()->lock()  ;	
 	/** We increase the global number of corrected errors. */
 	//  printf("local nb errors %lli \n",_local_nb_errors_corrected);
 	_thread_id = __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
@@ -630,17 +629,19 @@ CorrectReads::~CorrectReads ()
 	
 	
 	int nb_remaining = __sync_fetch_and_add (_nb_living, -1);
+
 	
 	#ifndef SERIAL
-	
 		if(nb_remaining==1)
 		{
+
 			_bankwriter->FlushWriter();
 		}
 	#endif
 	
 	if (_tab_multivote) { free(_tab_multivote); } // pourquoi plante ? lobjet correct read est il copié qq part ?
 	if (_newSeq)        { delete _newSeq;       }
+ getSynchro()->unlock()  ;
 
 	/** We release one token of the smart pointers. */
 	setSynchro    (0);
