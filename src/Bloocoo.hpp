@@ -107,10 +107,10 @@ public:
 	
 private:
 
-    Bloom<kmer_type>* _bloom;
+    IBloom<kmer_type>* _bloom;
     
     void execute ();
-    virtual Bloom<kmer_type>* createBloom ();
+    virtual IBloom<kmer_type>* createBloom ();
     void chooseCorrectionParams();
     
 };
@@ -125,7 +125,7 @@ class CorrectReads
 {
 	public:
 	
-		CorrectReads(Bloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, u_int64_t* nb_ins_corrected, u_int64_t* nb_del_corrected, int nb_cores, int * nbliving);
+		CorrectReads(IBloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, u_int64_t* nb_ins_corrected, u_int64_t* nb_del_corrected, int nb_cores, int * nbliving);
 		CorrectReads(const CorrectReads& cr);
 		~CorrectReads ();
 		void operator()(Sequence& sequence);
@@ -138,7 +138,7 @@ class CorrectReads
 		
 	private:
 	
-		Bloom<kmer_type> * _bloom; // the bloom containing the solid kmers
+		IBloom<kmer_type> * _bloom; // the bloom containing the solid kmers
 		Bag<Sequence> *             _outbank; // the bank cto insert the result : corrected reads
 		Bloocoo *         _bloocoo; // the parent bloocoo object
 		unsigned char *   _tab_multivote;

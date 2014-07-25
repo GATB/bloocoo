@@ -477,7 +477,7 @@ void Bloocoo::chooseCorrectionParams(){
  ** RETURN  :
  ** REMARKS :
  *********************************************************************/
-Bloom<kmer_type>* Bloocoo::createBloom ()
+IBloom<kmer_type>* Bloocoo::createBloom ()
 {
     TIME_INFO (getTimeInfo(), "fill bloom filter");
     
@@ -509,8 +509,8 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
     
     /** We instantiate the bloom object. */
     IProperties* stats = new Properties();  LOCAL (stats);
-    BloomBuilder<> builder (estimatedBloomSize, 7,tools::collections::impl::BloomFactory::CACHE,getInput()->getInt(STR_NB_CORES));
-    Bloom<kmer_type>* bloom = builder.build (itKmers, stats);
+    BloomBuilder<> builder (estimatedBloomSize, 7,tools::misc::BLOOM_CACHE,getInput()->getInt(STR_NB_CORES));
+    IBloom<kmer_type>* bloom = builder.build (itKmers, stats);
     
     getInfo()->add (1, "bloom");
     getInfo()->add (2, stats);
@@ -525,7 +525,7 @@ Bloom<kmer_type>* Bloocoo::createBloom ()
  * to perform the correction in multiple threads. Each instances of this classes
  * is synchronized*/
 /********************************************************************************/
-CorrectReads::CorrectReads(Bloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, u_int64_t* nb_ins_corrected, u_int64_t* nb_del_corrected, int nb_cores, int * nbliving)
+CorrectReads::CorrectReads(IBloom<kmer_type>* bloom, Bag<Sequence>* outbank, Bloocoo * bloocoo, u_int64_t* nb_errors_corrected, u_int64_t* nb_ins_corrected, u_int64_t* nb_del_corrected, int nb_cores, int * nbliving)
 : _bloom(bloom), _outbank(outbank), _bloocoo(bloocoo),
 _total_nb_errors_corrected (nb_errors_corrected),_total_nb_ins_corrected (nb_ins_corrected),
 _total_nb_del_corrected (nb_del_corrected),_local_nb_errors_corrected(0),
