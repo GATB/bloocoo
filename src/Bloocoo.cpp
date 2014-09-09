@@ -972,8 +972,8 @@ void CorrectReads::execute2(){
 	int nb_tries =0;
 	
 	int nb_checked;
-	KmerModel model (_kmerSize,KMER_DIRECT);
-	KmerModel::Iterator itKmer (model);
+	ModelDirect model (_kmerSize);
+	ModelDirect::Iterator itKmer (model);
 	bool error_exist;
 	
 	for(int j=0; j<_nb_less_restrictive_correction; j++){
@@ -991,11 +991,11 @@ void CorrectReads::execute2(){
 			
 			_kmers.clear();
 			for (itKmer.first(); !itKmer.isDone(); itKmer.next()){//, i++){
-				_kmers.push_back(*itKmer);
+				_kmers.push_back(itKmer->value());
 			}
 			
 			#ifdef PRINT_DEBUG
-				KmerModel::Iterator itKmer2 (model);
+			    ModelDirect::Iterator itKmer2 (model);
 				kmer_type kmer, kmer_min;
 				
 				itKmer2.setData (_sequence->getData());
@@ -1030,13 +1030,13 @@ void CorrectReads::execute2(){
 }
 
 void CorrectReads::trimSequence(){
-	KmerModel model (_kmerSize,KMER_DIRECT);
-	KmerModel::Iterator itKmer (model);
+	ModelDirect model (_kmerSize);
+	ModelDirect::Iterator itKmer (model);
 	kmer_type current_kmer;
 	kmer_type current_kmer_min;
 
 	#ifdef PRINT_DEBUG
-		KmerModel::Iterator itKmer2 (model);
+		ModelDirect::Iterator itKmer2 (model);
 		kmer_type kmer, kmer_min;
 		
 		itKmer2.setData (_sequence->getData());
@@ -1065,7 +1065,7 @@ void CorrectReads::trimSequence(){
 	int i = 0;
 	for(itKmer.first(); !itKmer.isDone(); itKmer.next(), i++){
 		
-		current_kmer = *itKmer;
+		current_kmer = itKmer->value();
 		current_kmer_min = min(current_kmer, revcomp(current_kmer, _kmerSize));
 		
 		if(_bloom->contains(current_kmer_min)){
@@ -1527,7 +1527,7 @@ int CorrectReads::aggressiveCorrection(int pos, int nb_kmer_check, Direction dir
     int nb_possibles_firstk=0;
 	char nt_temp;
     
-    KmerModel model (_kmerSize);
+    ModelCanonical model (_kmerSize);
     kmer_type current_kmer, current_kmer_min;
     
     int original_nt;
@@ -1865,14 +1865,26 @@ int CorrectReads::apply_correction(int pos, int good_nt,int algo){
  ** RETURN  :
  ** REMARKS :
  *********************************************************************/
-void CorrectReads::codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction){
-	if(direction == RIGHT){
-		*kmer = model->codeSeedRight(*kmer, nt, Data::INTEGER);
+void CorrectReads::codeSeedBin(ModelCanonical* model, kmer_type* kmer, int nt, Direction direction){
+
+    if(direction == RIGHT)
+	{
+        /** We initialize the canonical kmer. */
+        ModelCanonical::Kmer tmp;  tmp.set (*kmer, revcomp(*kmer, _kmerSize));
+
+        /** We get the kmer successor (in particular its value). */
+		*kmer = model->codeSeedRight (tmp, nt, Data::INTEGER).value();
 	}
-	else{
-		kmer_type kmer_end_rev = revcomp(*kmer, _kmerSize);
-		*kmer = model->codeSeedRight (kmer_end_rev, binrev[nt], Data::INTEGER);
-		*kmer = revcomp(*kmer, _kmerSize);
+	else
+	{
+        /** We initialize the canonical kmer. */
+	    ModelCanonical::Kmer tmp;  tmp.set (revcomp(*kmer, _kmerSize), *kmer);
+
+        /** We get the kmer successor. */
+		tmp = model->codeSeedRight (tmp, binrev[nt], Data::INTEGER);
+
+		/** We get the wanted value. */
+		*kmer = tmp.value()==tmp.forward() ? tmp.revcomp() : tmp.forward();
 	}
 }
 
@@ -1884,7 +1896,7 @@ void CorrectReads::codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direct
  ** RETURN  :
  ** REMARKS :
  *********************************************************************/
-void CorrectReads::codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction){
+void CorrectReads::codeSeedNT(ModelCanonical* model, kmer_type* kmer, char nt, Direction direction){
 	//Attention ici, penser à utiliser une fonction binToNT statique.
 	return codeSeedBin(model, kmer, (nt>>1)&3, direction);
 }
@@ -2172,7 +2184,7 @@ void CorrectReads::multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, 
  ** RETURN  :
  ** REMARKS :
  *********************************************************************/
-void CorrectReads::extendedAgressiveCorrection(int votes[4], KmerModel* model, kmer_type* last_mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction)
+void CorrectReads::extendedAgressiveCorrection(int votes[4], ModelCanonical* model, kmer_type* last_mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction)
 {
     //#ifdef PRINT_STATS
 	//	_bloocoo->__correction_methods_calls[Bloocoo::READ_SIDE] ++;
@@ -2204,7 +2216,7 @@ void CorrectReads::extendedAgressiveCorrection(int votes[4], KmerModel* model, k
  ** RETURN  :
  ** REMARKS :
  *********************************************************************/
-void CorrectReads::extendedAgressiveCorrectionRec(int votes[4], KmerModel* model, kmer_type* mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction, bool posVoted[], int depth)
+void CorrectReads::extendedAgressiveCorrectionRec(int votes[4], ModelCanonical* model, kmer_type* mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction, bool posVoted[], int depth)
 {
 	if(depth >= nb_kmer_check){
 		return;
@@ -2379,8 +2391,8 @@ void CorrectReads::executeIonCorrection(){
 	
 	
 	int nb_checked;
-	KmerModel model (_kmerSize,KMER_DIRECT);
-	KmerModel::Iterator itKmer (model);
+	ModelDirect model (_kmerSize);
+	ModelDirect::Iterator itKmer (model);
 	kmer_type current_kmer;
 	kmer_type current_kmer_min;
 	kmer_type last_wrong_kmer;
@@ -2438,7 +2450,7 @@ void CorrectReads::executeIonCorrection(){
 				
 				int nb_errors_cor = 0;
 				
-				current_kmer = *itKmer;
+				current_kmer = itKmer->value();
 				//kmers[ii] = &(*itKmer);
 				_kmers.push_back(current_kmer);
 				

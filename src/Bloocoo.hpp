@@ -39,7 +39,8 @@ using namespace std;
  insert that in a bloom filter, and correct read form it*/
 /********************************************************************************/
 
-typedef Kmer<>::Model KmerModel;
+typedef Kmer<>::ModelDirect    ModelDirect;
+typedef Kmer<>::ModelCanonical ModelCanonical;
 typedef Kmer<>::Type  kmer_type;
 typedef Kmer<>::Count kmer_count;
 //typedef gatb::core::tools::collections::impl OaHash;
@@ -200,11 +201,11 @@ class CorrectReads
 		int multiMutateVoteCorrection(int start_pos, int nb_kmer_check,int expected_first_pos,int expected_second_pos);
 		void multiMutateVoteCorrectionRec(int start_pos, int kmer_offset, kmer_type current_kmer, int nb_kmer_check, int kmer_index, int current_nb_mutation, int* max_vote, int* nb_max_vote, int *good_index, int pos1, int nt1,int expected_first_pos,int expected_second_pos);
 		
-		void extendedAgressiveCorrection(int votes[4], KmerModel* model, kmer_type* last_mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction);
-		void extendedAgressiveCorrectionRec(int votes[4], KmerModel* model, kmer_type* mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction, bool posVoted[], int depth);
+		void extendedAgressiveCorrection(int votes[4], ModelCanonical* model, kmer_type* last_mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction);
+		void extendedAgressiveCorrectionRec(int votes[4], ModelCanonical* model, kmer_type* mutated_kmer, int mutated_nt, int nb_kmer_check, Direction direction, bool posVoted[], int depth);
 		
-		void codeSeedBin(KmerModel* model, kmer_type* kmer, int nt, Direction direction);
-		void codeSeedNT(KmerModel* model, kmer_type* kmer, char nt, Direction direction);
+		void codeSeedBin(ModelCanonical* model, kmer_type* kmer, int nt, Direction direction);
+		void codeSeedNT(ModelCanonical* model, kmer_type* kmer, char nt, Direction direction);
 		
 		//void print_agressive_votes(int votes[4]);
 		//void print_votes(int votes[][4], int nb_column);
