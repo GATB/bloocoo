@@ -206,9 +206,10 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
 		}
 	#endif
 
-    /** We get an OptionsParser for DSK. */
-    OptionsParser parserDSK = DSK::getOptionsParser();
-    getParser()->push_back (parserDSK);
+    /** We add the sorting count options and hide all of them by default and display one some of them. */
+    getParser()->push_back (SortingCountAlgorithm<>::getOptionsParser(), 1);
+
+    if (IOptionsParser* input = getParser()->getParser (STR_URI_INPUT))  {  input->setName (STR_URI_FILE);  }
 
     /** We add options specific to this tool. */
     getParser()->push_back(new OptionOneParam(STR_URI_OUTPUT, "output file", false));
@@ -253,10 +254,45 @@ void Bloocoo::execute ()
     // We set some attributes (shortcuts).
     /*************************************************/
     _kmerSize           = getInput()->getInt (STR_KMER_SIZE);
-    _solidFile          = getInput()->getStr (STR_KMER_SOLID);
     chooseCorrectionParams();
     //_nb_kmers_checked   = getInput()->getInt (STR_NB_VALIDATED_KMERS);
     //_nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
+
+    string inputFilename = getInput()->getStr(STR_URI_FILE);
+    size_t nks           = getInput()->getInt (STR_KMER_ABUNDANCE_MIN);
+
+    _solidFile = getInput()->get(STR_URI_OUTPUT) ?
+        getInput()->getStr(STR_URI_OUTPUT) + ".h5"  :
+        System::file().getBaseName (inputFilename) + ".h5"; //_inputFilename instead of prefix GR
+
+    /*************************************************/
+    // Sorting count part
+    /*************************************************/
+    {
+        /** We open the input bank. */
+        IBank* inputBank = Bank::open(inputFilename);
+        LOCAL (inputBank);
+
+        /** We create the storage for the solid kmers. */
+        Storage* product = StorageFactory(STORAGE_HDF5).create (_solidFile, true, false);
+        LOCAL (product);
+
+        /** We create a DSK instance and execute it. */
+        SortingCountAlgorithm<> sortingCount (
+            product,
+            inputBank,
+            _kmerSize,
+            make_pair(nks,~0),
+            getInput()->getInt(STR_MAX_MEMORY),
+            getInput()->getInt(STR_MAX_DISK),
+            getInput()->getInt(STR_NB_CORES)
+        );
+
+        sortingCount.getInput()->add (0, STR_VERBOSE, getInput()->getStr(STR_VERBOSE));
+
+        /** We execute the sorting count. */
+        sortingCount.execute();
+    }
     
     /*************************************************/
     /** We create a bloom with inserted solid kmers. */
@@ -265,7 +301,6 @@ void Bloocoo::execute ()
     LOCAL (_bloom);
     
     //iterate over initial file
-    string inputFilename = getInput()->getStr(STR_URI_FILE);
     BankFasta inbank(inputFilename);
     
     //cout <<  inputFilename << std::endl;
@@ -381,7 +416,7 @@ void Bloocoo::execute ()
         
         // printf("---after dispatcher iterate ---\n");
     }
-    
+
     /*************************************************/
     // We gather some statistics.
     /*************************************************/
@@ -490,8 +525,8 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
     Storage* storage = StorageFactory(DSK::getStorageMode()).create (_solidFile, false, false);
     LOCAL (storage);
 
-    /** We retrieve the solid collection from the storage. */
-    Collection<kmer_count>& solidCollection = storage->root().getGroup("dsk").getCollection<kmer_count> ("solid");
+    /** We get an iterator over all the [kmer,abundance]  (ie. from all solid partitions). */
+    Partition<kmer_count> & solidCollection = storage->root().getGroup("dsk").getPartition<kmer_count> ("solid");
 
     /** We get the number of solid kmers. */
     u_int64_t solidFileSize = solidCollection.getNbItems();
@@ -509,7 +544,7 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
     
     /** We instantiate the bloom object. */
     IProperties* stats = new Properties();  LOCAL (stats);
-    BloomBuilder<> builder (estimatedBloomSize, 7,tools::misc::BLOOM_CACHE,getInput()->getInt(STR_NB_CORES));
+    BloomBuilder<> builder (estimatedBloomSize, 7, _kmerSize, tools::misc::BLOOM_CACHE,getInput()->getInt(STR_NB_CORES));
     IBloom<kmer_type>* bloom = builder.build (itKmers, stats);
     
     getInfo()->add (1, "bloom");
@@ -665,14 +700,14 @@ void CorrectReads::operator()(Sequence& sequence){
 	_kmers.clear();
 	_nb_kmer_offset = -2;
 	_use_newSeq = false;
-	
+
 	if(_bloocoo->_ion_mode){
 		executeIonCorrection();
 	}
 	else{
 		execute2();
 	}
-	
+
 	writeSequence();
 }
 
@@ -1217,7 +1252,7 @@ bool CorrectReads::searchError(bool* error_exist)
 			//_bloocoo->__error_detected += 1;
 			*error_exist = true;
 			//successive_trusted_kmer_count = 0;
-			
+
 			int startPos = searchErrorZoneRec(i, false, 0);
 			int endPos = searchErrorZoneRec(i, true, 0);
 			

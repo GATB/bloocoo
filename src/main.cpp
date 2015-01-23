@@ -31,19 +31,12 @@ int main (int argc, char* argv[])
     // We define a try/catch block in case some method fails
     try
     {
-        ToolComposite tool;
-
-        tool.add (new DSK           ());
-        tool.add (new Bloocoo       ());
-
-        tool.run (argc, argv);
+        Bloocoo().run (argc, argv);
     }
 
     catch (OptionFailure& e)
     {
-        e.getParser().displayErrors (stdout);
-        e.getParser().displayHelp   (stdout);
-        return EXIT_FAILURE;
+        return e.displayErrors (cout);
     }
 
     catch (Exception& e)
