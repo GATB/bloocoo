@@ -46,6 +46,9 @@
 #include "ReadWriter.h"
 
 
+#define DEBUG(a)  //printf a
+
+
 // We use the required packages
 using namespace std;
 using namespace gatb::core::system;
@@ -66,6 +69,8 @@ using namespace gatb::core::tools::math;
 void OrderedBankWriter::insert(const Sequence&  seq)
 {
 
+	DEBUG(("___ oblock insert seq id %zu \n",seq.getIndex()));
+
     size_t id;  
 
     while (1)
@@ -75,6 +80,8 @@ void OrderedBankWriter::insert(const Sequence&  seq)
         {
         
             _buffReceive[id] =  seq;
+			DEBUG(("___ successfully  inserted bid %i  rid %i  _nbMax %i  _idx %i   base %i \n",seq.getIndex(),id,_nbMax,_idx,_base));
+
             break;
         }
         else
@@ -87,8 +94,12 @@ void OrderedBankWriter::insert(const Sequence&  seq)
 
             while (id >= _nbMax )
             {
+				DEBUG(("___________ waiting to insert   bid %i   id %i, _nbMax %i  _idx %i   _base %i   going to sleep\n",seq.getIndex(),id,_nbMax,_idx,_base));
+
                 pthread_cond_wait(&buffer_full_cond, &writer_mutex);
                  id  = seq.getIndex() - _base;
+				DEBUG(("___ waken up  to insert   bid %i   id %i, _nbMax %i  _base %i\n",seq.getIndex(),id,_nbMax,_base));
+
             }
             pthread_mutex_unlock(&writer_mutex);
             
@@ -109,14 +120,19 @@ void OrderedBankWriter::incDone (int nbdone)
     old_val = __sync_fetch_and_add (& _idx, nbdone);
    // printf("\n ++ ninc oldval  %i base = %i ++ \n",old_val,_base);
 
+	DEBUG(("\n ++ ninc oldval  %i base = %i ++ \n",old_val,_base));
+
     // buffer completely filled : activates writer thread
     if( (old_val + nbdone) ==_nbMax)  
     {
        // printf("\n ++ ninc done %zd  and buff done, base = %zd ++ \n",old_val,_base);
+		DEBUG(("\n ++ ninc done %zd  and buff done, base = %zd ++ \n",old_val,_base));
 
         ///// wait for writer to be free
         pthread_mutex_lock(&writer_mutex);
         while (_writer_available==0) {
+			DEBUG(("\n ++ wait for writer to be free ++ \n"));
+
             pthread_cond_wait(&writer_available_cond, &writer_mutex);
         }
         //buffReceive is full, will be written
@@ -129,6 +145,8 @@ void OrderedBankWriter::incDone (int nbdone)
         
         //signal writer he should write buffer
         _buffer_full = 1;
+		DEBUG(("\n ++ swap buffers , order writer to write++ idx %i new base %i should wake all  \n",_idx,_base));
+
         pthread_cond_broadcast(&buffer_full_cond);
         pthread_mutex_unlock(&writer_mutex);
 
@@ -161,6 +179,8 @@ void OrderedBankWriter::FlushWriter ()
     if( _idx)
     {
       //  printf("\n flushing %zd base = %zd ++ \n",_idx,_base);
+		DEBUG(("\n flushing %zd base = %zd ++ \n",_idx,_base));
+
         ///// wait for writer to be free
         while (_writer_available==0) {
             pthread_cond_wait(&writer_available_cond, &writer_mutex);
@@ -212,6 +232,8 @@ void * writer(void * args)
         }
         obw->_writer_available = 0; //writer becomes busy
       //  printf(" writer thread  awaken !! ..  will write %i elems \n",*to_be_written);
+		DEBUG((" **** writer thread  awaken !! ..  will write %i elems **** \n",*to_be_written));
+
         pthread_mutex_unlock(&(obw->writer_mutex));
         
 
@@ -228,7 +250,11 @@ void * writer(void * args)
         obw->_buffer_full=0;
         obw->_writer_available=1;
       //  printf(" writer thread  setting  _buffer_full to 0 .. %i  tobewrit %i \n",obw->_buffer_full,*to_be_written);
-        pthread_cond_signal(&(obw->writer_available_cond));
+        //pthread_cond_signal(&(obw->writer_available_cond));
+		pthread_cond_broadcast(&(obw->writer_available_cond));
+
+		DEBUG((" **** writer thread  finished !!            **** \n"));
+
         pthread_mutex_unlock(&(obw->writer_mutex));
     }
     
