@@ -301,8 +301,8 @@ void Bloocoo::execute ()
     LOCAL (_bloom);
     
     //iterate over initial file
-    BankFasta inbank(inputFilename);
-    
+    	IBank* inbank = Bank::open(inputFilename);
+
     //cout <<  inputFilename << std::endl;
     
     _max_trim = 0;
@@ -323,13 +323,14 @@ void Bloocoo::execute ()
     bool fastq_mode= false;
     if( inputFilename.find("fastq") !=  string::npos )  fastq_mode =true;
     //printf("-- %s -- fq mode %i \n",getInput()->getStr(DSK::STR_URI_DATABASE).c_str(),fastq_mode);
-    
+        if( inputFilename.find("fq") !=  string::npos )  fastq_mode =true;
+
     /*************************************************/
     // We create a sequence iterator for the bank
     /*************************************************/
     Iterator<Sequence>* itSeq = createIterator<Sequence> (
-                                                          inbank.iterator(),
-                                                          inbank.estimateNbItems(),
+                                                          inbank->iterator(),
+                                                          inbank->estimateNbItems(),
                                                           "Iterating and correcting sequences"
                                                           );
     LOCAL (itSeq);
