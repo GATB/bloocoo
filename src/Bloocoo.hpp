@@ -27,6 +27,11 @@
 #include <string>
 #include <sstream>
 
+#define BLOOCOO_VERSION_MAJOR 1
+#define BLOOCOO_VERSION_MINOR 0
+#define BLOOCOO_VERSION_PATCH 5
+
+
 #include "ReadWriter.h"
 //#include <vector>
 //#include <bitset>
