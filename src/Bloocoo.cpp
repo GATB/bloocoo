@@ -259,7 +259,6 @@ void Bloocoo::execute ()
     //_nb_min_valid = getInput()->getInt (STR_NB_MIN_VALID);
 
     string inputFilename = getInput()->getStr(STR_URI_FILE);
-    size_t nks           = getInput()->getInt (STR_KMER_ABUNDANCE_MIN);
 
     _solidFile = getInput()->get(STR_URI_OUTPUT) ?
         getInput()->getStr(STR_URI_OUTPUT) + ".h5"  :
@@ -273,20 +272,8 @@ void Bloocoo::execute ()
         IBank* inputBank = Bank::open(inputFilename);
         LOCAL (inputBank);
 
-        /** We create the storage for the solid kmers. */
-        Storage* product = StorageFactory(STORAGE_HDF5).create (_solidFile, true, false);
-        LOCAL (product);
-
-        /** We create a DSK instance and execute it. */
-        SortingCountAlgorithm<> sortingCount (
-            product,
-            inputBank,
-            _kmerSize,
-            make_pair(nks,~0),
-            getInput()->getInt(STR_MAX_MEMORY),
-            getInput()->getInt(STR_MAX_DISK),
-            getInput()->getInt(STR_NB_CORES)
-        );
+        /** We create a SortingCountAlgorithm instance. */
+        SortingCountAlgorithm<> sortingCount (inputBank, getInput());
 
         sortingCount.getInput()->add (0, STR_VERBOSE, getInput()->getStr(STR_VERBOSE));
 
