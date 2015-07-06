@@ -1,9 +1,9 @@
 #!/bin/bash
 #simple  test with synthetic data
 
-echo -n "Testing two close errors"
+echo -n "Testing two close errors..."
 
-../build/Bloocoo -file datatest/errclose.fasta -kmer-size 31 -nks 5 -err-tab &> /dev/null
+../build/Bloocoo -file datatest/errclose.fasta -kmer-size 31 -abundance-min 5 -err-tab &> /dev/null
 
 
 diff errclose_bloocoo_corr_errs.tab ./datatest/true_res_test4 > /dev/null

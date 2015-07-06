@@ -3,7 +3,7 @@
 
 echo -n "Testing isolated error, middle of read"
 
-../build/Bloocoo -file datatest/errm.fasta -kmer-size 31 -nks 5  -err-tab &> /dev/null
+../build/Bloocoo -file datatest/errm.fasta -kmer-size 31 -abundance-min 5  -err-tab &> /dev/null
 
 diff errm_bloocoo_corr_errs.tab ./datatest/true_res_test1 > /dev/null
 
@@ -20,7 +20,7 @@ fi
 
 echo -n "Testing isolated error, left side"
 
-../build/Bloocoo -file datatest/errleft.fasta -kmer-size 31 -nks 5 -err-tab  &> /dev/null
+../build/Bloocoo -file datatest/errleft.fasta -kmer-size 31 -abundance-min 5 -err-tab  &> /dev/null
 
 
 diff errleft_bloocoo_corr_errs.tab ./datatest/true_res_test2 > /dev/null
@@ -39,7 +39,7 @@ fi
 
 echo -n "Testing isolated error, right side"
 
-../build/Bloocoo -file datatest/errright.fasta -kmer-size 31 -nks 5 -err-tab  &> /dev/null
+../build/Bloocoo -file datatest/errright.fasta -kmer-size 31 -abundance-min 5 -err-tab  &> /dev/null
 
 
 diff errright_bloocoo_corr_errs.tab ./datatest/true_res_test3 > /dev/null
@@ -57,7 +57,7 @@ fi
 
 echo -n "Testing two close errors"
 
-../build/Bloocoo -file datatest/errclose.fasta -kmer-size 31 -nks 5 -err-tab  &> /dev/null
+../build/Bloocoo -file datatest/errclose.fasta -kmer-size 31 -abundance-min 5 -err-tab  &> /dev/null
 
 
 diff errclose_bloocoo_corr_errs.tab ./datatest/true_res_test4 > /dev/null
