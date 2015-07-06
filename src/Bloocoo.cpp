@@ -41,6 +41,11 @@ const char* Bloocoo::STR_PRECISION            = "-high-precision";
 const char* Bloocoo::STR_SLOW            = "-slow";
 const char* Bloocoo::STR_MAX_TRIM            = "-max-trim";
 
+const char* Bloocoo::STR_HISTO_ONLY            = "-count-only";
+const char* Bloocoo::STR_FROM_H5            = "-from-h5";
+
+
+
 // these 2 tabs are now known globally
 //char bin2NT[4] = {'A','C','T','G'};
 //char binrev[4]    = {2,3,0,1};
@@ -188,8 +193,6 @@ _bankwriter(NULL),_temp_nb_seq_done(0)
 
 
 
-
-
 /********************************************************************************/
 /* Class Bloocoo for read correction : takes as input a bag of solid kmers (dsk result),
  insert that in a bloom filter, and correct read form it*/
@@ -221,6 +224,12 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ION, "ion correction mode", false));
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ERR_TAB, "generate error tabs", false));
     getParser()->push_back(new OptionOneParam(STR_MAX_TRIM, "max number of bases that can be trimmed per read", false));
+	
+	
+	getParser()->push_back(new OptionNoParam (Bloocoo::STR_FROM_H5, "do not re-compute kmer counts, suppose h5 file already computed (with previous run with -count-only)", false));
+	getParser()->push_back(new OptionNoParam (Bloocoo::STR_HISTO_ONLY, "do not correct, only count kmers", false));
+
+	
 }
 
 /*********************************************************************
@@ -264,9 +273,24 @@ void Bloocoo::execute ()
         getInput()->getStr(STR_URI_OUTPUT) + ".h5"  :
         System::file().getBaseName (inputFilename) + ".h5"; //_inputFilename instead of prefix GR
 
+	if( _fromH5Mode )
+	{
+		FILE* testfile = fopen (_solidFile.c_str(), "r");
+		if (testfile == 0)
+		{
+			fprintf(stderr,"File %s not found, cannot start from h5 file\n",_solidFile.c_str());
+			exit(1);
+		}
+		else
+		{
+			fclose( testfile);
+		}
+	}
+	
     /*************************************************/
     // Sorting count part
     /*************************************************/
+	if(! _fromH5Mode) //in from h5 mode, suppose the h5 file is present
     {
         /** We open the input bank. */
         IBank* inputBank = Bank::open(inputFilename);
@@ -279,6 +303,13 @@ void Bloocoo::execute ()
 
         /** We execute the sorting count. */
         sortingCount.execute();
+		
+		
+		if(_countOnlyMode)
+		{
+			printf("Count only mode : kmer counts and histogram of occurences are in the  %s file \n",_solidFile.c_str());
+			exit(0);
+		}
     }
     
     /*************************************************/
@@ -436,7 +467,10 @@ void Bloocoo::chooseCorrectionParams(){
     bool isRecallMode = getParser()->saw(Bloocoo::STR_RECALL);
     bool isPrecisionMode = getParser()->saw(Bloocoo::STR_PRECISION);
     bool isSlowMode = getParser()->saw(Bloocoo::STR_SLOW);
-    
+	
+	 _fromH5Mode = getParser()->saw(Bloocoo::STR_FROM_H5);
+	 _countOnlyMode = getParser()->saw(Bloocoo::STR_HISTO_ONLY);
+
 	if(isSlowMode){
 		_nb_less_restrictive_correction = 2;
 		if(isRecallMode){ //8-4 8-2
