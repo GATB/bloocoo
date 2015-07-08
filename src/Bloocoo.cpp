@@ -215,7 +215,6 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
     if (IOptionsParser* input = getParser()->getParser (STR_URI_INPUT))  {  input->setName (STR_URI_FILE);  }
 
     /** We add options specific to this tool. */
-    getParser()->push_back(new OptionOneParam(STR_URI_OUTPUT, "output file", false));
     getParser()->push_back(new OptionNoParam (Bloocoo::STR_RECALL, "correct a lot but can introduce more mistakes", false));
     getParser()->push_back(new OptionNoParam (Bloocoo::STR_PRECISION, "correct safely, correct less but introduce less mistakes", false));
     getParser()->push_back(new OptionNoParam (Bloocoo::STR_SLOW, "slower but better correction", false));
