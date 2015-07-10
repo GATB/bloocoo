@@ -49,6 +49,8 @@ add_executable        (${PROJECT_NAME}  ${ProjectFiles})
 # we define which libraries to be linked with project binary
 target_link_libraries (${PROJECT_NAME}  ${gatb-core-libraries})
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/metaBloocoo DESTINATION ${PROJECT_BINARY_DIR})
+
 ################################################################################
 #  PACKAGING 
 ################################################################################
@@ -60,8 +62,8 @@ SET (CPACK_SOURCE_GENERATOR     "TGZ")
 # We copy the project binary to the 'bin' directory
 INSTALL (TARGETS ${PROJECT_NAME} DESTINATION bin)
 
-# copy the script too
-INSTALL (FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/metaBloocoo DESTINATION bin)
+# copy the metaBloocoo script too
+INSTALL (FILES ${CMAKE_CURRENT_SOURCE_DIR}/scripts/metaBloocoo DESTINATION bin)
 
 # For the source archive, we exclude some unwanted directories.
 SET (CPACK_SOURCE_IGNORE_FILES  ${CPACK_SOURCE_IGNORE_FILES} "/build/" "/test/" "/sam_stats/"  ".gitignore$")

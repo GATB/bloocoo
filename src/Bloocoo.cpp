@@ -359,7 +359,7 @@ void Bloocoo::execute ()
     string outputFilename;
     if(getInput()->get(STR_URI_OUTPUT)){
 		outputFilename = getInput()->getStr(STR_URI_OUTPUT);
-		prefix = System::file().getBaseName(outputFilename);
+		prefix = System::file().getBaseName(outputFilename); // FIXME or delete this comment: won't this override the path? e.g. if the user set an output file to another folder 
 	}
 	else{
 		/** We get the basename from the provided URI (ie remove directory path and suffix). */

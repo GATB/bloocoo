@@ -1,0 +1,227 @@
+#!/usr/bin/env python 
+# -*- coding: utf-8 -*-
+
+from __future__ import unicode_literals
+
+doc = """metaBloocoo
+
+To run, first execute:
+
+    metaBloocoo count -file <read_file> -kmer-size <k> [options] [-ascii_graph]
+
+Take a look at the histograms returned by the previous command.
+Then, determine suitable correction thresholds, and execute:
+
+    metaBloocoo correct -file <read_file> -kmer-size <k> -t1 <threshold1> [-t2 <threshold2>, etc..] [options]
+
+""" 
+
+from subprocess import call, Popen, PIPE
+from glob import glob
+from re import match
+import sys, os 
+
+if sys.version_info[0] == 2 and sys.version_info[1] < 5:
+    exit("Python >= 2.5 is required")
+
+if sys.version_info[0] == 2:
+    #unbuffered print, solves badly ordered stdout on clusters
+    #I don't yet know how to make this python3-compatible, so it's active for python2 only
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', 0)
+
+if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
+    exit(doc)
+
+arguments = sys.argv[2:]
+
+DIR = os.path.dirname(os.path.realpath(__file__))
+if DIR.endswith("scripts"):
+    DIR = DIR[:-7] + "build" #development hack
+
+# all arguments with values
+arguments_with_values = [ (sys.argv[i-1],  sys.argv[i]) for i in xrange(len(sys.argv)) if i > 0 and sys.argv[i-1].startswith("-") and not sys.argv[i].startswith("-")]
+
+# all arguments, regardless if they have values or not, except the -t1 <x> [-t2 <y> ..]  args
+arguments_except_thresholds = [ arg for i, arg in enumerate(arguments) if not match(r"-t(\d)", arg) and not (i > 0 and match(r"-t(\d)", arguments[i-1]))]
+
+# same as above, except "-out <file> -in <file>" are also removed
+arguments_except_thresholds_and_inout = [ arg for i, arg in enumerate(arguments_except_thresholds) if not arg == "-out" and not (i > 0 and arguments[i-1] == "-out") and not arg == "-file" and not (i > 0 and arguments[i-1] == "-file")]
+
+given_input_file = dict(arguments_with_values)["-file"]
+
+#get the list of thresholds
+thresholds = []
+for akey, aval in arguments_with_values:
+    threshold = match(r"-t(\d)",akey)
+    if threshold is not None:
+        thresholds += [int(threshold.group(1))]
+thresholds = sorted(thresholds)[::-1] # start with highest threshold
+
+def histogram_raw_to_list(histogram_raw):
+    histogram = []
+    for line in histogram_raw.strip().split('\n'):
+        abundance, number = line.split(',')
+        histogram += [(str(abundance), int(number))]
+    return histogram
+
+def clamp_histogram(histogram_raw):
+    # determine a value after which it's pointless to display the histogram
+    # criteria: 99% of kmers to the left
+
+    histogram = histogram_raw_to_list(histogram_raw)
+    cumsum = 0
+    sum_up_to = []
+    for abundance, number in histogram:
+        cumsum += number
+        sum_up_to += [cumsum]
+
+    new_histogram = []
+    for i, histoval in enumerate(histogram):
+        new_histogram += [histoval]
+        if sum_up_to[i] >= 0.99 * cumsum:
+            histogram_raw = "\n".join(histogram_raw.split("\n")[:i])
+            break 
+ 
+    return new_histogram, histogram_raw
+
+def determine_output_file(phase, threshold, passing_thresholds):
+    extension = ".fastq" # TODO: bloocoo has some fasta stuff too
+    if "-out" in dict(arguments_with_values):
+        output_file =  dict(arguments_with_values)["-out"]
+    else:
+        # mimics gatb way of creating an output file name
+        readfile = given_input_file
+        if "," in readfile: # if list of files
+            readfile = readfile.split(",")[0]
+        basefile = os.path.basename(readfile)
+        output_file = basefile.split(".")[0] # current gatb way of getting base name (probably will be changed later)
+        #output_file = ".".join(basefile.split(".")[:-1]) # should be a better way
+
+    if phase == 1:
+        # first phase consists of countig with a threshold of 2, and
+        # outputting to the h5 file for the first threshold value
+        # but we don't yet know the threshold value, so just set it as 
+        # normal output for now; will be symlinked later
+        return output_file + "_count"
+    else:
+        if threshold == passing_thresholds[0]:
+            # symlink output from phase 1
+            output_phase_1 = output_file + ("_corrected_t%d" % threshold) + extension + ".h5"
+            if os.path.exists(output_phase_1):
+                os.remove(output_phase_1)
+            os.symlink(output_file + "_count" + ".h5", output_phase_1)
+
+        #create intermediate output files until it's the last threshold
+        if threshold == passing_thresholds[-1]:
+            return output_file + "_corrected" + extension
+        else:
+            return output_file + ("_corrected_t%d" % threshold) + extension
+
+def determine_input_file(phase, threshold, previous_threshold, passing_thresholds):
+    if phase == 1:
+        return given_input_file
+    else:
+        if threshold == passing_thresholds[0]:
+            return given_input_file
+        else:
+            return determine_output_file(phase, previous_threshold, [-1]) #dummy list of thresholds, never make it think it's the last threshold
+
+
+def execute(phase):
+    rc = 0 
+    try:
+        if phase == 1:
+            passing_thresholds = [2]
+        elif phase == 2:
+            passing_thresholds = thresholds
+
+        previous_threshold = 0
+        for threshold in passing_thresholds:
+            input_file = determine_input_file(phase, threshold, previous_threshold, passing_thresholds)
+
+            output_file = determine_output_file(phase, threshold, passing_thresholds)
+           
+            # set phase arguments
+            if phase == 2:
+                if threshold == passing_thresholds[0]: # load from h5 for first threshold only
+                    phase_arguments = ["-from-h5"]
+                else:
+                    phase_arguments = []
+            elif phase == 1:
+                phase_arguments = ["-count-only"]
+
+            # bloocoo call
+            cmd = ["%s/Bloocoo" % DIR, "-abundance-min", str(threshold), "-file", input_file, "-out", output_file] + arguments_except_thresholds_and_inout + phase_arguments
+            print "command line: " + " " .join(cmd)
+            rc = call(cmd)
+
+            previous_threshold = threshold
+            if rc != 0:
+                break
+
+    except OSError as e:
+        print >>sys.stderr, "Execution of phase %d failed:" % phase
+        import traceback
+        print >>sys.stderr, traceback.format_exc()
+        exit(1)
+
+    if rc != 0:
+        exit("Execute of phase %d failed (%d)" % (phase, rc) )
+
+
+    # dispay histogram
+    if phase == 1:
+        # get the h5 file
+        output_file = determine_output_file(phase, 0, [])
+        h5file = output_file + ".h5"
+        try:
+            cmd = "%s/ext/gatb-core/bin/h5dump -y -d histogram/histogram" % DIR
+            cmd = cmd.split(" ")
+            cmd += [h5file]
+            p1 = Popen(cmd, stdout=PIPE)
+
+            cmd2 = ["grep","^\ *[0-9]"]
+            p2 = Popen(cmd2, stdin=p1.stdout, stdout=PIPE)
+            p1.stdout.close()
+
+            p3 = Popen(["tr","-d","\" \""], stdin=p2.stdout, stdout=PIPE)
+            p2.stdout.close()
+
+            p4 = Popen(["paste","-","-"], stdin=p3.stdout, stdout=PIPE)
+            p3.stdout.close()
+
+            histogram_raw = p4.communicate()[0]
+            histogram, histogram_raw = clamp_histogram(histogram_raw)
+
+            hist_fname = h5file + ".histogram"
+            with open(hist_fname, "w") as f:
+                f.write(histogram_raw + "\n")
+
+            print "displaying histogram (raw values are in %s):" % hist_fname
+
+            plot_type = "gnuplot_term"
+            if "-ascii_graph" in sys.argv:
+                plot_type = "ascii_graph"
+            if plot_type == "ascii_graph":
+                from ascii_graph import Pyasciigraph
+                graph = Pyasciigraph(graphsymbol="-")
+                for line in graph.graph('test', histogram):
+                    print(line)
+            elif plot_type == "gnuplot_term":
+                cmd = ["gnuplot","-p", "-e","set term dumb; unset key;  plot \"-\" with lines"]
+                p = Popen(cmd,stdin=PIPE,stdout=PIPE)
+                print p.communicate(input=histogram_raw)[0]
+    
+        except OSError as e:
+            print >>sys.stderr, "Execution of histogram display after phase 1 failed:", e
+            import traceback
+            print >>sys.stderr, traceback.format_exc()
+            exit(1)
+    
+
+if sys.argv[1] == "count":
+    execute(1)
+elif sys.argv[1] == "correct":
+    execute(2)
+else:
+    exit(doc)
