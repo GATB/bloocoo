@@ -12,7 +12,9 @@ To run, first execute:
 Take a look at the histograms returned by the previous command.
 Then, determine suitable correction thresholds, and execute:
 
-    metaBloocoo correct -file <read_file> -kmer-size <k> -t1 <threshold1> [-t2 <threshold2>, etc..] [options]
+    metaBloocoo correct -file <read_file> -t1 <threshold1> [-t2 <threshold2>, etc..] [options]
+
+The order of thresholds does not matter. metaBloocoo will always correct from the largest threshold to the smallest.
 
 """ 
 
@@ -54,7 +56,7 @@ thresholds = []
 for akey, aval in arguments_with_values:
     threshold = match(r"-t(\d)",akey)
     if threshold is not None:
-        thresholds += [int(threshold.group(1))]
+        thresholds += [int(aval)] #[int(threshold.group(1))]
 thresholds = sorted(thresholds)[::-1] # start with highest threshold
 
 def histogram_raw_to_list(histogram_raw):
