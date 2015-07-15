@@ -49,7 +49,11 @@ add_executable        (${PROJECT_NAME}  ${ProjectFiles})
 # we define which libraries to be linked with project binary
 target_link_libraries (${PROJECT_NAME}  ${gatb-core-libraries})
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/metaBloocoo DESTINATION ${PROJECT_BINARY_DIR})
+#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/metaBloocoo DESTINATION ${PROJECT_BINARY_DIR})
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ln -sf "${CMAKE_CURRENT_SOURCE_DIR}/scripts/metaBloocoo" "${PROJECT_BINARY_DIR}"
+)
 
 ################################################################################
 #  PACKAGING 
