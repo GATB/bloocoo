@@ -345,11 +345,14 @@ void Bloocoo::execute ()
     /*************************************************/
     // We create a sequence iterator for the bank
     /*************************************************/
-    Iterator<Sequence>* itSeq = createIterator<Sequence> (
+	Iterator<Sequence>* itSeq =
+	//pourquoi ce create iterator fait perdre la compo de literator ?  ensuite  itSeq->getComposition() renvoit 1 truc seul : il y avait bug gatb-core
+	createIterator<Sequence> (
                                                           inbank->iterator(),
                                                           inbank->estimateNbItems(),
                                                           "Iterating and correcting sequences"
                                                           );
+	
     LOCAL (itSeq);
     
     /*************************************************/
@@ -377,12 +380,10 @@ void Bloocoo::execute ()
 			outputFilename = prefix + string("_corrected.fasta");
 	}
 
-	cout << "\tInput filename: " << inputFilename << endl;
-	cout << "\tOutput filename: " << outputFilename << endl;
+
     
     bool gz_mode= false;
-    BankFasta outbank (outputFilename, fastq_mode,gz_mode);
-    
+	
     
     //BagCache<Sequence> *  outbank_cache = new BagCache<Sequence> (&outbank,10000);
     
@@ -410,6 +411,9 @@ void Bloocoo::execute ()
 		string ferrfile3 = prefix + string ("_debug.tab");
 		_debug = System::file().newFile (ferrfile3, "wb");
 	#endif
+	
+	
+	std::vector<string> outbanknames;
     /*************************************************/
     // We iterate over sequences and correct them
     /*************************************************/
@@ -427,10 +431,48 @@ void Bloocoo::execute ()
 		#else
 			setDispatcher (  new Dispatcher (getInput()->getInt(STR_NB_CORES)) );
 		#endif
-        
-        
+		
+		
+		std::vector<Iterator<Sequence>*> itBanks =  itSeq->getComposition();
+
+		//printf("itseq nb compo %i \n",itBanks.size());
+		
+		for (size_t i=0; i<itBanks.size(); i++)
+		{
+		//	printf("should iterate bank i %i   bankalbum id  %s ,sub bank id %s  \n",i, inbank->getId().c_str(),inbank->getIdNb(i).c_str() );
+			
+			if(itBanks.size()>1)
+				prefix = System::file().getBaseName(inbank->getIdNb(i));
+			else
+				prefix = System::file().getBaseName(inbank->getId());
+			
+			if(fastq_mode)
+				outputFilename = prefix + string("_corrected.fastq");
+			else
+				outputFilename = prefix + string("_corrected.fasta");
+			
+			
+			outbanknames.push_back(outputFilename);
+			if(itBanks.size()>1)
+			cout << "\tInput filename: " << inbank->getIdNb(i) << endl;
+			else
+			cout << "\tInput filename: " << inbank->getId() << endl;
+			
+			cout << "\tOutput filename: " << outputFilename << endl;
+			
+			
+			
+			BankFasta outbank (outputFilename, fastq_mode,gz_mode);
+
+			
+			getDispatcher()->iterate (itBanks[i],  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected, &total_nb_ins_corrected, &total_nb_del_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000);
+			
+			itBanks[i]->finalize();
+			
+		}
+		
         //replace outbank_cache with &outbank to remove usage of bagcache
-        getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected, &total_nb_ins_corrected, &total_nb_del_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000); // , 10000
+ // , 10000
         
         // printf("---after dispatcher iterate ---\n");
     }
@@ -445,7 +487,19 @@ void Bloocoo::execute ()
         getInfo()->add (2, "nb ins corrected", "%ld", total_nb_ins_corrected);
         getInfo()->add (2, "nb del corrected", "%ld", total_nb_del_corrected);
     }
-    getInfo()->add (2, "corrected file", outputFilename);
+	string outfile ;
+
+	for (size_t i=0; i<inbank->getCompositionNb(); i++)
+	{
+		if(i>0) outfile+= " , ";
+		outfile+=  outbanknames[i];
+	}
+	
+	if(inbank->getCompositionNb()>1)
+    	getInfo()->add (2, "corrected file", outfile);
+	else
+		getInfo()->add (2, "corrected file", outputFilename);
+	
     #ifdef PRINT_STATS
     	printf("Correction methods stats (TwoSided, Agressive, Vote, MultiMutateVote):\n");
 		for(int i=0; i<NB_CORRECTION_METHODS; i++){
