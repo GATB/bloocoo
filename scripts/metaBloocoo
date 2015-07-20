@@ -7,7 +7,7 @@ doc = """metaBloocoo
 
 To run, first execute:
 
-    metaBloocoo count -file <read_file> -kmer-size <k> [options] [-ascii_graph]
+    metaBloocoo count -file <read_file> -kmer-size <k> [options] [-alt_ascii_graph]
 
 Take a look at the histograms returned by the previous command.
 Then, determine suitable correction thresholds, and execute:
@@ -217,8 +217,9 @@ def execute(phase):
                 print "gnuplot not found on path, won't plot histogram" 
 
             plot_type = "gnuplot_term"
-            if "-ascii_graph" in sys.argv:
+            if "-alt_ascii_graph" in sys.argv:
                 plot_type = "ascii_graph"
+
             if plot_type == "ascii_graph":
                 from ascii_graph import Pyasciigraph
                 graph = Pyasciigraph(graphsymbol="-")
