@@ -62,20 +62,22 @@ thresholds = sorted(thresholds)[::-1] # start with highest threshold
 def histogram_raw_to_list(histogram_raw):
     histogram = []
     for line in histogram_raw.strip().split('\n'):
-        abundance, number = line.split(',')
+        abundance, number = line.split()
         histogram += [(str(abundance), int(number))]
     return histogram
 
 def clamp_histogram(histogram_raw):
     # determine a value after which it's pointless to display the histogram
     # criteria: 99% of kmers to the left
+    # refinement: 99% of kmers of coverage above 3 to the left
 
     histogram = histogram_raw_to_list(histogram_raw)
     cumsum = 0
     sum_up_to = []
     for abundance, number in histogram:
-        cumsum += number
-        sum_up_to += [cumsum]
+        if int(abundance) > 2:
+            cumsum += number
+            sum_up_to += [cumsum]
 
     new_histogram = []
     for i, histoval in enumerate(histogram):
@@ -193,13 +195,26 @@ def execute(phase):
             p3.stdout.close()
 
             histogram_raw = p4.communicate()[0]
-            histogram, histogram_raw = clamp_histogram(histogram_raw)
+
+            if len(histogram_raw) < 2:
+                raise Exception("No histogram was produced, see error above")
+
+            histogram_raw = histogram_raw.replace(",","") # remove all commas
 
             hist_fname = h5file + ".histogram"
             with open(hist_fname, "w") as f:
                 f.write(histogram_raw + "\n")
 
+            histogram, histogram_raw = clamp_histogram(histogram_raw)
+
             print "displaying histogram (raw values are in %s):" % hist_fname
+
+            try:
+                call(["gnuplot", '--version'])
+                has_gnuplot = True
+            except OSError:
+                has_gnuplot = False
+                print "gnuplot not found on path, won't plot histogram" 
 
             plot_type = "gnuplot_term"
             if "-ascii_graph" in sys.argv:
@@ -209,12 +224,21 @@ def execute(phase):
                 graph = Pyasciigraph(graphsymbol="-")
                 for line in graph.graph('test', histogram):
                     print(line)
-            elif plot_type == "gnuplot_term":
+            elif plot_type == "gnuplot_term" and has_gnuplot:
                 cmd = ["gnuplot","-p", "-e","set term dumb; unset key;  plot \"-\" with lines"]
                 p = Popen(cmd,stdin=PIPE,stdout=PIPE)
                 print p.communicate(input=histogram_raw)[0]
+
+            if has_gnuplot: # anyway plot histogram graphically
+                hist_png_fname = h5file + ".histogram.png"
+                print "Also plotting to file "+ hist_png_fname
+                cmd = ["gnuplot","-e","set term png; set output \"%s\"; unset key;  plot \"-\" with lines" % hist_png_fname]
+                p = Popen(cmd, stdin=PIPE, stdout=PIPE)
+                p.communicate(input=histogram_raw)
+                print "Done"
+            
     
-        except OSError as e:
+        except Exception as e:
             print >>sys.stderr, "Execution of histogram display after phase 1 failed:", e
             import traceback
             print >>sys.stderr, traceback.format_exc()
