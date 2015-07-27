@@ -43,8 +43,8 @@ if DIR.endswith("scripts"):
 # all arguments with values
 arguments_with_values = [ (sys.argv[i-1],  sys.argv[i]) for i in xrange(len(sys.argv)) if i > 0 and sys.argv[i-1].startswith("-") and not sys.argv[i].startswith("-")]
 
-# all arguments, regardless if they have values or not, except the -t1 <x> [-t2 <y> ..]  args
-arguments_except_thresholds = [ arg for i, arg in enumerate(arguments) if not match(r"-t(\d)", arg) and not (i > 0 and match(r"-t(\d)", arguments[i-1]))]
+# all arguments, regardless if they have values or not, except the -t1 <x> [-t2 <y> ..] args and also without the -ascii_graph
+arguments_except_thresholds = [ arg for i, arg in enumerate(arguments) if not match(r"-t(\d)", arg) and not (i > 0 and match(r"-t(\d)", arguments[i-1])) and not arguments[i] == "-ascii_graph"]
 
 # same as above, except "-out <file> -in <file>" are also removed
 arguments_except_thresholds_and_inout = [ arg for i, arg in enumerate(arguments_except_thresholds) if not arg == "-out" and not (i > 0 and arguments[i-1] == "-out") and not arg == "-file" and not (i > 0 and arguments[i-1] == "-file")]
