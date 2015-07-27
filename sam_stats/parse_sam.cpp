@@ -46,10 +46,10 @@ int main(int argc, char** argv)
 
 	
 	
-	char * tempread = (char *) calloc(10000,1);
+	char * tempread = (char *) calloc(1000000,1);
 	
-	char tempref [1000];
-	char ref_name [1000];
+	char * tempref = (char *)  malloc(1000000);
+	char * ref_name = (char *)  malloc(1000000);
 	
 	int64_t nb_bases_total = 0;
 	int64_t nb_dist_total = 0;
@@ -61,8 +61,8 @@ int main(int argc, char** argv)
 	
 	
 	
-	char tempgeno [1000];
-	char tempcontig [1000];
+	char * tempgeno = (char *)  malloc(1000000);
+	char * tempcontig = (char *)  malloc(1000000);
 	float c_cov;
 	int clen;
 	info_contig cur_ci;
