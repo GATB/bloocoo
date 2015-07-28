@@ -443,16 +443,20 @@ void Bloocoo::execute ()
 			
 			if(itBanks.size()>1)
 				prefix = System::file().getBaseName(inbank->getIdNb(i));
-			else
+			else if (!(getInput()->get(STR_URI_OUTPUT)))
 				prefix = System::file().getBaseName(inbank->getId());
 			
-			if(fastq_mode)
-				outputFilename = prefix + string("_corrected.fastq");
-			else
-				outputFilename = prefix + string("_corrected.fasta");
+			if( itBanks.size()>1   ||  !(getInput()->get(STR_URI_OUTPUT)) )
+			{
+				if(fastq_mode)
+					outputFilename = prefix + string("_corrected.fastq");
+				else
+					outputFilename = prefix + string("_corrected.fasta");
+			}
 			
 			
 			outbanknames.push_back(outputFilename);
+			
 			if(itBanks.size()>1)
 			cout << "\tInput filename: " << inbank->getIdNb(i) << endl;
 			else
