@@ -18,8 +18,8 @@ fi
 # we launch bloocoo
 ################################################################################
 #../build/Bloocoo -file SRS018585/SRS018585.denovo_duplicates_marked.trimmed.1.fastq
-../build/metaBloocoo count -file SRS018585/SRS018585.denovo_duplicates_marked.trimmed.1.fastq -ascii_graph
-../build/metaBloocoo correct -file SRS018585/SRS018585.denovo_duplicates_marked.trimmed.1.fastq -t1 2 -t2 5 -t3 10
+../build/metaBloocoo count -file SRS018585/SRS018585.denovo_duplicates_marked.trimmed.1.fastq #-out SRS018585 #-alt_ascii_graph
+../build/metaBloocoo correct -file SRS018585/SRS018585.denovo_duplicates_marked.trimmed.1.fastq -t1 2 -t2 5 -t3 10 #-out SRS018585
 
 
 if [ $? -eq 0 ]; then
