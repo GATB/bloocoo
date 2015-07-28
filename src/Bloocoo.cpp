@@ -441,35 +441,77 @@ void Bloocoo::execute ()
 		{
 		//	printf("should iterate bank i %i   bankalbum id  %s ,sub bank id %s  \n",i, inbank->getId().c_str(),inbank->getIdNb(i).c_str() );
 			
-			if(itBanks.size()>1)
-				prefix = System::file().getBaseName(inbank->getIdNb(i));
-			else if (!(getInput()->get(STR_URI_OUTPUT)))
-				prefix = System::file().getBaseName(inbank->getId());
 			
-			if( itBanks.size()>1   ||  !(getInput()->get(STR_URI_OUTPUT)) )
+			////name management
+			if(!(getInput()->get(STR_URI_OUTPUT)))
+			{
+				if(itBanks.size()>1)
+					prefix = System::file().getBaseName(inbank->getIdNb(i));
+				else
+					prefix = System::file().getBaseName(inbank->getId());
+			}
+			else //name provided by user
+			{
+				if(itBanks.size()>1)
+					prefix =  System::file().getBaseName(getInput()->getStr(STR_URI_OUTPUT)) + Stringify::format ("_%i_", i);
+				else
+					prefix =  System::file().getBaseName(getInput()->getStr(STR_URI_OUTPUT));
+			}
+			
+			if(  !(getInput()->get(STR_URI_OUTPUT)) )
 			{
 				if(fastq_mode)
 					outputFilename = prefix + string("_corrected.fastq");
 				else
 					outputFilename = prefix + string("_corrected.fasta");
 			}
-			
+			else //name provided by user
+			{
+				if(itBanks.size()>1)
+				{
+					if(fastq_mode)
+						outputFilename = prefix + string(".fastq");
+					else
+						outputFilename = prefix + string(".fasta");
+				}
+				else
+					outputFilename =  getInput()->getStr(STR_URI_OUTPUT);
+			}
+			/////////
 			
 			outbanknames.push_back(outputFilename);
 			
 			if(itBanks.size()>1)
-			cout << "\tInput filename: " << inbank->getIdNb(i) << endl;
+				cout << "\tInput filename: " << inbank->getIdNb(i) << endl;
 			else
-			cout << "\tInput filename: " << inbank->getId() << endl;
+				cout << "\tInput filename: " << inbank->getId() << endl;
 			
 			cout << "\tOutput filename: " << outputFilename << endl;
+			
+			
+			
+			char msg[1000];
+			if(itBanks.size()>1)
+				snprintf(msg,1000,"Correcting sequences, file %i",i+1);
+			else
+				snprintf(msg,1000,"Iterating and correcting sequences");
+
+			
+			
+		 	itSeq =
+					createIterator<Sequence> (
+									itBanks[i],
+									inbank->estimateNbItemsBanki(i),
+									msg
+									  );
+			
 			
 			
 			
 			BankFasta outbank (outputFilename, fastq_mode,gz_mode);
 
 			
-			getDispatcher()->iterate (itBanks[i],  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected, &total_nb_ins_corrected, &total_nb_del_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000);
+			getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected, &total_nb_ins_corrected, &total_nb_del_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000);
 			
 			itBanks[i]->finalize();
 			
