@@ -1500,7 +1500,7 @@ int CorrectReads::startCorrectionInZone(int startPos, int endPos)
 	}
 	//Error in middle of the read
 	else{
-		nb_errors_cor = aggressiveCorrection(endPos - _kmerSize + 1, nb_checked, RIGHT);
+		nb_errors_cor = aggressiveCorrection(startPos  , nb_checked, RIGHT); // was endPos - _kmerSize + 1
 		if(nb_errors_cor > 0) return nb_errors_cor;
 		nb_errors_cor = aggressiveCorrection(endPos, nb_checked, LEFT);
 		if(nb_errors_cor > 0) return nb_errors_cor;
@@ -2022,25 +2022,29 @@ int CorrectReads::apply_correction(int pos, int good_nt,int algo){
  ** REMARKS :
  *********************************************************************/
 void CorrectReads::codeSeedBin(ModelCanonical* model, kmer_type* kmer, int nt, Direction direction){
-
-    if(direction == RIGHT)
+	
+	if(direction == RIGHT)
 	{
-        /** We initialize the canonical kmer. */
-        ModelCanonical::Kmer tmp;  tmp.set (*kmer, revcomp(*kmer, _kmerSize));
-
-        /** We get the kmer successor (in particular its value). */
-		*kmer = model->codeSeedRight (tmp, nt, Data::INTEGER).value();
+		/** We initialize the canonical kmer. */
+		ModelCanonical::Kmer tmp;  tmp.set (*kmer, revcomp(*kmer, _kmerSize));
+		
+		/** We get the kmer successor (in particular its value). */
+		tmp = model->codeSeedRight (tmp, nt, Data::INTEGER); //.value()
+		
+		*kmer = tmp.forward() ;  // GR I think we need tmp.forward(), was .value before
+		
 	}
 	else
 	{
-        /** We initialize the canonical kmer. */
-	    ModelCanonical::Kmer tmp;  tmp.set (revcomp(*kmer, _kmerSize), *kmer);
-
-        /** We get the kmer successor. */
+		/** We initialize the canonical kmer. */
+		ModelCanonical::Kmer tmp;  tmp.set (revcomp(*kmer, _kmerSize), *kmer);
+		
+		/** We get the kmer successor. */
 		tmp = model->codeSeedRight (tmp, binrev[nt], Data::INTEGER);
-
+		
+		*kmer = tmp.forward() ;
 		/** We get the wanted value. */
-		*kmer = tmp.value()==tmp.forward() ? tmp.revcomp() : tmp.forward();
+		//  *kmer = tmp.value()==tmp.forward() ? tmp.revcomp() : tmp.forward(); // GR hmm no I think we need tmp.forward()
 	}
 }
 
