@@ -1,0 +1,4 @@
+>dummy(simulate_a_read_that_hasnt_been_corrected)
+ACATGATGATGATA
+>ref1(1del_2mismatches_in_uncorr;1faussecor+1goodcor_in_corr)
+ACTATGTGAGACTGAGCGGATACCTGAGATGACC

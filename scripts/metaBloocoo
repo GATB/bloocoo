@@ -109,7 +109,15 @@ def determine_output_file(phase, threshold, passing_thresholds):
         return output_file + "_count"
     else:
         if threshold == passing_thresholds[0]:
-            # symlink output from phase 1
+            # symlink output from phase 1:
+            # [output_file]_count.h5
+            # to 
+            # [output_file]_corrected_tX.fastq.h5
+            # this is because Bloocoo expects that the h5 file matches the output prefix:
+            #    _solidFile = getInput()->get(STR_URI_OUTPUT) ?
+            #            getInput()->getStr(STR_URI_OUTPUT) + ".h5"  :
+            #                        System::file().getBaseName (inputFilename) + ".h5"; //_inputFilename instead of prefix GR
+            # (we always specify -out when running bloocoo from metabloocoo)
             output_phase_1 = output_file + ("_corrected_t%d" % threshold) + extension + ".h5"
             if os.path.exists(output_phase_1):
                 os.remove(output_phase_1)
