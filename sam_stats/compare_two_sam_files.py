@@ -63,7 +63,6 @@ if cami_mode:
         for id in genomes_tab[genome]:
                 for g in reference.keys():
                     if id in g:
-                        print g, id
                         refnames[g] = genome
 
     def group_cami_chromosomes(refname):
