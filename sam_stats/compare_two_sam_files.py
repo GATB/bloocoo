@@ -57,20 +57,30 @@ if cami_mode:
         genomes_abundance[genome] = float(abundance)
         genomes_size[genome] += int(size)
 
-    if not os.path.exists("30_genomes_refs"):
-        os.mkdir("30_genomes_refs")
-
     # find genome names back in original fasta file
     refnames = dict()
     for genome in genomes_tab.keys():
         for id in genomes_tab[genome]:
                 for g in reference.keys():
                     if id in g:
-                        refnames[id] = g
+                        print g, id
+                        refnames[g] = genome
 
     def group_cami_chromosomes(refname):
         return refnames[refname]
 
+def report_ref_keys():
+    # ordered by abundance
+    global genomes_abundance, refnames, good_corrections_per_ref
+    if cami_mode:
+        return map(lambda x: x[1], sorted([(genomes_abundance[genome], genome) for genome in genomes_abundance]))
+    else:   
+        return good_corrections_per_ref.keys()
+
+def ref_abundances(genome):
+    if cami_mode:
+        return "%.1f"%genomes_abundance[genome]
+    return "-"
 
 def report():
     print "---"
@@ -79,9 +89,10 @@ def report():
     print "good/bad base corrections", good_corrections, "/", bad_corrections
     print "better/worse reads", better_reads, "/", worse_reads
     print "per reference:"
-    print "refname\tb_good\tb_bad\tr_better\tr_worse"
-    for refname in good_corrections_per_ref.keys():
-        print refname,"\t",good_corrections_per_ref[refname], "\t", bad_corrections_per_ref[refname], "\t",better_reads_per_ref[refname], "\t", worse_reads_per_ref[refname]
+    template = "{0:12}|{1:12}|{2:12}|{3:12}|{4:12}|{5:12}"
+    print template.format("refname","abundance","bases_good","bases_bad","reads_better","reads_worse")
+    for refname in report_ref_keys():
+        print template.format(refname, ref_abundances(refname), good_corrections_per_ref[refname], bad_corrections_per_ref[refname], better_reads_per_ref[refname],  worse_reads_per_ref[refname])
     print "---"
 
 
@@ -131,12 +142,16 @@ for cor_read in mapped_reads_corrected:
         continue
 
     refname = mapped_reads_corrected.getrname(cor_read.reference_id)
-    if cami_mode:
-        refname = group_cami_chromosomes(refname)
     cor_mismatches = get_mismatches_tuples(cor_read, refname)
     uncor_mismatches = get_mismatches_tuples(uncor_read, refname)
     good_corrections += len(uncor_mismatches - cor_mismatches)
     bad_corrections += len(cor_mismatches - uncor_mismatches)    
+
+    # reporting per-genome stats
+    
+    if cami_mode:
+        refname = group_cami_chromosomes(refname)
+
     good_corrections_per_ref[refname] += len(uncor_mismatches - cor_mismatches)
     bad_corrections_per_ref[refname] += len(cor_mismatches - uncor_mismatches)    
     #print cor_mismatches - uncor_mismatches, cor_mismatches, uncor_mismatches, cor_read.aend, uncor_read.aend
