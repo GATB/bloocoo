@@ -9,7 +9,9 @@ from collections import defaultdict
 import sys
 
 if len(sys.argv) < 4:
-    exit("args: cor.sam uncor.sam ref.fa")
+    exit("args: cor.sam uncor.sam ref.fa [--cami]") # cami mode is for grouping chromosomes in per-reference reporting
+
+cami_mode = "--cami" in sys.argv
 
 def open_sambam(file):
     return pysam.Samfile(file, "rb" if file.endswith("bam") else "r")#, check_header = False, check_sq = False)
@@ -39,6 +41,35 @@ good_corrections_per_ref, bad_corrections_per_ref = defaultdict(int), defaultdic
 better_reads, worse_reads = 0,0
 better_reads_per_ref, worse_reads_per_ref = defaultdict(int), defaultdict(int)
 uncor_iterator = mapped_reads_uncorrected
+
+if cami_mode:
+    tab = open("cami_refgenomes.tab")
+
+    genomes_tab = defaultdict(list)
+    genomes_size = defaultdict(int)
+    genomes_abundance = dict()
+
+    tab.next() #skip header
+    for line in tab:
+        id, genome, abundance, size, id1 = line.split()
+        genome = genome[:-2] #remove the ".1" at the end
+        genomes_tab[genome].append(id)
+        genomes_abundance[genome] = float(abundance)
+        genomes_size[genome] += int(size)
+
+    if not os.path.exists("30_genomes_refs"):
+        os.mkdir("30_genomes_refs")
+
+    # find genome names back in original fasta file
+    refnames = dict()
+    for genome in genomes_tab.keys():
+        for id in genomes_tab[genome]:
+                for g in reference.keys():
+                    if id in g:
+                        refnames[id] = g
+
+    def group_cami_chromosomes(refname):
+        return refnames[refname]
 
 
 def report():
@@ -100,6 +131,8 @@ for cor_read in mapped_reads_corrected:
         continue
 
     refname = mapped_reads_corrected.getrname(cor_read.reference_id)
+    if cami_mode:
+        refname = group_cami_chromosomes(refname)
     cor_mismatches = get_mismatches_tuples(cor_read, refname)
     uncor_mismatches = get_mismatches_tuples(uncor_read, refname)
     good_corrections += len(uncor_mismatches - cor_mismatches)
