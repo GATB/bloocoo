@@ -5,7 +5,7 @@
 import pysam
 import pyfasta
 import string
-from collections import Counter
+from collections import defaultdict 
 import sys
 
 if len(sys.argv) < 4:
@@ -35,7 +35,9 @@ def get_mismatches_tuples(r, refname):
 cor_read_counter = 0
 nb_bases_in_cor_reads, nb_bases_in_uncor_reads = 0, 0
 good_corrections, bad_corrections = 0,0
+good_corrections_per_ref, bad_corrections_per_ref = defaultdict(int), defaultdict(int)
 better_reads, worse_reads = 0,0
+better_reads_per_ref, worse_reads_per_ref = defaultdict(int), defaultdict(int)
 uncor_iterator = mapped_reads_uncorrected
 
 
@@ -45,6 +47,10 @@ def report():
     print "number of bases in corrected/uncorrected reads:",nb_bases_in_cor_reads,"/", nb_bases_in_uncor_reads
     print "good/bad base corrections", good_corrections, "/", bad_corrections
     print "better/worse reads", better_reads, "/", worse_reads
+    print "per reference:"
+    print "refname\tb_good\tb_bad\tr_better\tr_worse"
+    for refname in good_corrections_per_ref.keys():
+        print refname,"\t",good_corrections_per_ref[refname], "\t", bad_corrections_per_ref[refname], "\t",better_reads_per_ref[refname], "\t", worse_reads_per_ref[refname]
     print "---"
 
 
@@ -98,11 +104,15 @@ for cor_read in mapped_reads_corrected:
     uncor_mismatches = get_mismatches_tuples(uncor_read, refname)
     good_corrections += len(uncor_mismatches - cor_mismatches)
     bad_corrections += len(cor_mismatches - uncor_mismatches)    
+    good_corrections_per_ref[refname] += len(uncor_mismatches - cor_mismatches)
+    bad_corrections_per_ref[refname] += len(cor_mismatches - uncor_mismatches)    
     #print cor_mismatches - uncor_mismatches, cor_mismatches, uncor_mismatches, cor_read.aend, uncor_read.aend
 
     if len(cor_mismatches) < len(uncor_mismatches):
         better_reads += 1
+        better_reads_per_ref[refname] += 1
     elif len(cor_mismatches) > len(uncor_mismatches):
         worse_reads += 1
+        worse_reads_per_ref[refname] += 1
 
 report()
