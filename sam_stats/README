@@ -1,0 +1,19 @@
+example of how to use compare_two_sam_files and parse_sam:
+
+#!/bin/bash
+
+
+. /local/env/envbowtie-2.2.3.sh
+. /local/env/envsamtools.sh
+
+bowtie2   --threads 24  -x /omaha-beach/clemaitr/metabloocoo/CAMI_30genomes/refgenome.fasta_index  -U $1 > $1.sam
+
+#./parse_sam $1.sam S_S001__genomes_30__insert_180_abundances.tsv
+
+samtools sort -n -O bam -T $1.sorted.bam.tmpprefix -o $1.sorted.bam -@ 8 $1.sam
+
+python -S ~/gatb-tools/gatb-tools/tools/bloocoo/sam_stats/compare_two_sam_files.py $1.sorted.bam ../corrections/bloocoo/S_S001__genomes_30__insert_180_reads_anonymous.fq.gz.sorted.bam /omaha-beach/cami/30_genomes_refgenome.fasta --cami | tee OUTPUT_COMPARE_$1
+
+-----
+
+sam_stats is not really used, it has hardcoded paths

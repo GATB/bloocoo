@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # requires: python >=2.7, pysam and pyfasta>=0.8 (e.g. pip install --user pysam pyfasta) if it fails, read this: http://stackoverflow.com/questions/20585218/install-python-package-without-root-access
 # also on genocluster, run with "python -S" else it will take the machine pyfasta (older version, not compatible)
+# if there is a weird exception regarding reference id's, delete the reference.fa.* files (or /omaha-beach/cami/30_genomes_refgenome.fasta.*), becuase pyfasta does some strange caching
 
 import pysam
 import pyfasta
 import string
 from collections import defaultdict 
-import sys
+import sys, os
 
 if len(sys.argv) < 4:
     exit("args: cor.sam uncor.sam ref.fa [--cami]") # cami mode is for grouping chromosomes in per-reference reporting
@@ -42,8 +43,15 @@ better_reads, worse_reads = 0,0
 better_reads_per_ref, worse_reads_per_ref = defaultdict(int), defaultdict(int)
 uncor_iterator = mapped_reads_uncorrected
 
+def try_to_open(possible_paths):
+    found_paths = filter(os.path.isfile, possible_paths)
+    if len(found_paths) > 0:
+        return open(found_paths[0])
+    else:
+        sys.exit("missing cannot find file in those paths: %s" % str(possible_paths))
+
 if cami_mode:
-    tab = open("cami_refgenomes.tab")
+    tab = try_to_open(["cami_refgenomes.tab","/omaha-beach/clemaitr/metabloocoo/eval/cami_refgenomes.tab"])
 
     genomes_tab = defaultdict(list)
     genomes_size = defaultdict(int)
@@ -63,7 +71,6 @@ if cami_mode:
         for id in genomes_tab[genome]:
                 for g in reference.keys():
                     if id in g:
-                        print g, id
                         refnames[g] = genome
 
     def group_cami_chromosomes(refname):
@@ -71,7 +78,7 @@ if cami_mode:
 
 def report_ref_keys():
     # ordered by abundance
-    global genomes_abundance, refnames, good_corrections_per_ref
+    global genomes_abundance, good_corrections_per_ref
     if cami_mode:
         return map(lambda x: x[1], sorted([(genomes_abundance[genome], genome) for genome in genomes_abundance]))
     else:   
@@ -164,3 +171,4 @@ for cor_read in mapped_reads_corrected:
         worse_reads_per_ref[refname] += 1
 
 report()
+print "all done"
