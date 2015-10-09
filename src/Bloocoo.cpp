@@ -61,7 +61,7 @@ const char* Bloocoo::STR_FROM_H5            = "-from-h5";
 
 
 //#define PRINT_DEBUG
-#define PRINT_STATS // only in single thread mode
+//#define PRINT_STATS // only in single thread mode
 
 #define PRINT_LOG_MULTI 0
 
