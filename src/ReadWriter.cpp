@@ -174,6 +174,7 @@ void OrderedBankWriter::waitForWriter ()
 //guaranteed by design only one thread at the end will call this
 void OrderedBankWriter::FlushWriter ()
 {
+	//printf("___ FlushWriter ___\n");
 	pthread_mutex_lock(&writer_mutex);
 
     if( _idx)
@@ -204,6 +205,16 @@ void OrderedBankWriter::FlushWriter ()
         pthread_cond_wait(&writer_available_cond, &writer_mutex);
     }
     pthread_mutex_unlock(&writer_mutex);
+	
+	//and should kill writer here
+	
+	pthread_mutex_lock(&writer_mutex);
+	_writer_kill_order = 1;
+	_buffer_full = 1;
+	pthread_cond_broadcast(&buffer_full_cond); //wakes him up and kills him
+	pthread_mutex_unlock(&writer_mutex);
+
+
 }
 
 
@@ -231,9 +242,15 @@ void * writer(void * args)
             pthread_cond_wait(&(obw->buffer_full_cond), &(obw->writer_mutex));
         }
         obw->_writer_available = 0; //writer becomes busy
-      //  printf(" writer thread  awaken !! ..  will write %i elems \n",*to_be_written);
+//        printf(" writer thread  awaken !! ..  will write %i elems \n",*to_be_written);
 		DEBUG((" **** writer thread  awaken !! ..  will write %i elems **** \n",*to_be_written));
-
+		
+		if(obw->_writer_kill_order==1)
+		{
+			printf("--writer thread exiting --\n");
+			return NULL;
+		}
+	
         pthread_mutex_unlock(&(obw->writer_mutex));
         
 

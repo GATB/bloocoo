@@ -71,7 +71,7 @@ public:
     
     /** Constructor. */
     OrderedBankWriter (Bag<Sequence> * bank, size_t buffsize)
-    : _ref(0), _nbMax(buffsize), _buffWrite (buffsize), _buffReceive (buffsize), _base(0), _writer_available(1), _buffer_full(0), _idx(0),_to_be_written(0)
+    : _writer_available(1), _buffer_full(0),_to_be_written(0), _buffWrite (buffsize), _buffReceive (buffsize),_ref(0),  _nbMax(buffsize), _idx(0), _base(0),_writer_kill_order(0)
     {
         setRef(bank);
         
@@ -84,13 +84,16 @@ public:
         pthread_cond_init (&buffer_full_cond, NULL);
         
         pthread_create (&_thread, NULL,  writer, &t_arg);
-      //  printf("  .. end   this %p    cond %p   targs %p\n",this,&buffer_full_cond, &t_arg );
+       // printf("--OrderedBankWriter constructor, create thread  %p  ,    this %p    cond %p   targs %p--\n",&_thread,this,&buffer_full_cond, &t_arg );
 
     }
     
     /** Destructor. */
     ~OrderedBankWriter ()
-    {
+	{
+		//printf(" OrderedBankWriter destructor,   this %p   \n",this );
+		pthread_mutex_destroy(&writer_mutex);
+
         setRef(0);
     }
     
@@ -108,6 +111,8 @@ public:
     pthread_cond_t writer_available_cond;
     pthread_cond_t buffer_full_cond;
     int _writer_available ;
+	int _writer_kill_order ;
+
     int _buffer_full;
     int _to_be_written;
     

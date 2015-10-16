@@ -442,6 +442,20 @@ void Bloocoo::execute ()
 		//	printf("should iterate bank i %i   bankalbum id  %s ,sub bank id %s  \n",i, inbank->getId().c_str(),inbank->getIdNb(i).c_str() );
 			
 			
+
+			fastq_mode =false;
+			string bankname;
+			if(itBanks.size()>1)
+				bankname = System::file().getBaseName(inbank->getIdNb(i));
+			else
+				bankname = System::file().getBaseName(inbank->getId());
+			
+			if( bankname.find("fastq") !=  string::npos )  fastq_mode =true;
+			if( bankname.find("fq") !=  string::npos )     fastq_mode =true;
+			
+			
+		//	printf("bank name %s fastq mode %i \n",bankname.c_str(),fastq_mode);
+			
 			////name management
 			if(!(getInput()->get(STR_URI_OUTPUT)))
 			{
