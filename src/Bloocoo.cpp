@@ -111,12 +111,13 @@ inline unsigned int popcount_64(uint64_t x)
 int contains_homopolymer (kmer_type kmer, int sizeKmer)
 {
     
-    kmer_type  kmerMask=(((kmer_type)1)<<(sizeKmer*2))-1;
+    kmer_type one; one.setVal(1);
+    kmer_type  kmerMask=(one<<(sizeKmer*2))-1;
     
     // kmer_type rfin = 0xffffffffffffffc0; //elim 3 derniers
-    kmer_type rfin = 0xffffffffffffff00; //elim 4 derniers
+    kmer_type rfin; rfin.setVal( 0xffffffffffffff00); //elim 4 derniers
     
-    kmer_type m= 0x5555555555555555;
+    kmer_type m; m.setVal(0x5555555555555555);
     
     //    char kmerbuff[sizeKmer+1];
     //    code2seq(kmer,kmerbuff);
@@ -147,8 +148,9 @@ int contains_homopolymer (kmer_type kmer, int sizeKmer)
     x = (x & (x >> 1)) & m ;
     //printf("%llx   (fin )\n",x.getVal());
     
-    kmer_type  maskFirstNt=(((kmer_type)3)<<((sizeKmer-1)*2)); // select first nt
-    kmer_type  maskSecondNt=(((kmer_type)3)<<((sizeKmer-2)*2));
+    kmer_type three; three.setVal(3);
+    kmer_type  maskFirstNt=(three<<((sizeKmer-1)*2)); // select first nt
+    kmer_type  maskSecondNt=(three<<((sizeKmer-2)*2));
     
     if((x & maskFirstNt).getVal()  >0) return 1;
     if((x & maskSecondNt).getVal() >0 ) return 2;
@@ -2078,8 +2080,10 @@ void CorrectReads::codeSeedNT(ModelCanonical* model, kmer_type* kmer, char nt, D
 // AAAAAAACAA
 void CorrectReads::mutate_kmer(kmer_type * kmer, int pos, char nt)
 {
-    kmer_type reset_mask =  ~((kmer_type)3 << (pos*2));
-    kmer_type set_mask =  ((kmer_type)nt) << (pos*2);
+    kmer_type trois; trois.setVal(3);
+    kmer_type reset_mask =  ~(trois << (pos*2));
+    kmer_type kmer_nt; kmer_nt.setVal(nt);
+    kmer_type set_mask =  kmer_nt << (pos*2);
     *kmer = (*kmer & reset_mask )  | set_mask;
 }
 
