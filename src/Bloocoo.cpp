@@ -2573,7 +2573,7 @@ void CorrectReads::executeIonCorrection(){
 	ModelDirect::Iterator itKmer (model);
 	kmer_type current_kmer;
 	kmer_type current_kmer_min;
-	kmer_type last_wrong_kmer;
+	kmer_type last_wrong_kmer; last_wrong_kmer.setVal(0); // else it is not initialized
 	int pos_homopo = 0;
 	
 
