@@ -52,7 +52,7 @@ Additional useful options :
    -high-recall  :  correct more errors but can also introduce more mistakes
    -slow : slower modes with more pass, but better correction
    -high-precision :  correct safely, correct less errors but introduce less mistakes
-   -ion : (experimental) mode for correcting indels present in  ion torrent readsUsage for Leon :
+   -ion : (experimental) mode for correcting indels present in  ion torrent reads
 
 
 Examples : 
