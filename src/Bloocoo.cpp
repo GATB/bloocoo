@@ -344,6 +344,8 @@ void Bloocoo::execute ()
     //printf("-- %s -- fq mode %i \n",getInput()->getStr(DSK::STR_URI_DATABASE).c_str(),fastq_mode);
         if( inputFilename.find("fq") !=  string::npos )  fastq_mode =true;
 
+	printf("fastq mode %i \n",fastq_mode);
+	
     /*************************************************/
     // We create a sequence iterator for the bank
     /*************************************************/
@@ -448,15 +450,15 @@ void Bloocoo::execute ()
 			fastq_mode =false;
 			string bankname;
 			if(itBanks.size()>1)
-				bankname = System::file().getBaseName(inbank->getIdNb(i));
+				bankname = (inbank->getIdNb(i)); // System::file().getBaseName
 			else
-				bankname = System::file().getBaseName(inbank->getId());
+				bankname = System::file().getBaseName(inbank->getId()); // was System::file().getBaseName
 			
 			if( bankname.find("fastq") !=  string::npos )  fastq_mode =true;
 			if( bankname.find("fq") !=  string::npos )     fastq_mode =true;
 			
 			
-		//	printf("bank name %s fastq mode %i \n",bankname.c_str(),fastq_mode);
+			printf("bank name %s fastq mode %i \n",bankname.c_str(),fastq_mode);
 			
 			////name management
 			if(!(getInput()->get(STR_URI_OUTPUT)))
@@ -527,7 +529,7 @@ void Bloocoo::execute ()
 			BankFasta outbank (outputFilename, fastq_mode,gz_mode);
 
 			
-			getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected, &total_nb_ins_corrected, &total_nb_del_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000);
+			getDispatcher()->iterate (itSeq,  CorrectReads (_bloom, &outbank , this, &total_nb_errors_corrected, &total_nb_ins_corrected, &total_nb_del_corrected,getInput()->getInt(STR_NB_CORES),&nb_corrector_threads_living),10000); // was 10000
 			
 			itBanks[i]->finalize();
 			
@@ -703,7 +705,7 @@ _total_nb_errors_corrected (nb_errors_corrected),_total_nb_ins_corrected (nb_ins
 _total_nb_del_corrected (nb_del_corrected),_local_nb_errors_corrected(0),
 _synchro(0),_temp_nb_seq_done(0), _nb_living(nbliving), _bankwriter(0)
 {
-	setBankWriter (new OrderedBankWriter(outbank,nb_cores*10000));
+	setBankWriter (new OrderedBankWriter(outbank,nb_cores*10000));// was 10000
 	_thread_id = __sync_fetch_and_add (_nb_living, 1);
 	_local_nb_ins_corrected =0;
 	_local_nb_del_corrected =0;
@@ -783,13 +785,12 @@ CorrectReads::CorrectReads(const CorrectReads& cr) //called by dispatcher iterat
 
 CorrectReads::~CorrectReads ()
 {
-	 // printf("------- CorrectReads Destructor  %p --------- tid %i \n",this,_thread_id);
- getSynchro()->lock()  ;	
+ getSynchro()->lock()  ;
 	/** We increase the global number of corrected errors. */
 	//  printf("local nb errors %lli \n",_local_nb_errors_corrected);
-	_thread_id = __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
-	_thread_id = __sync_fetch_and_add (_total_nb_ins_corrected, _local_nb_ins_corrected);
-	_thread_id = __sync_fetch_and_add (_total_nb_del_corrected, _local_nb_del_corrected);
+	 __sync_fetch_and_add (_total_nb_errors_corrected, _local_nb_errors_corrected);
+	 __sync_fetch_and_add (_total_nb_ins_corrected, _local_nb_ins_corrected);
+	 __sync_fetch_and_add (_total_nb_del_corrected, _local_nb_del_corrected);
 	
    // printf("tot nb ins c %lli loc %lli \n",*_total_nb_ins_corrected,_local_nb_ins_corrected);
 
@@ -802,11 +803,14 @@ CorrectReads::~CorrectReads ()
 	
 	int nb_remaining = __sync_fetch_and_add (_nb_living, -1);
 
+	//printf("------- CorrectReads Destructor  %p --------- nb_remaining  %i \n",this,nb_remaining);
+
+	
 	
 	#ifndef SERIAL
 		if(nb_remaining==1)
 		{
-
+		//	printf("should flush writer  nbr %i \n",nb_remaining);
 			_bankwriter->FlushWriter();
 		}
 	#endif
@@ -817,7 +821,7 @@ CorrectReads::~CorrectReads ()
 
 	/** We release one token of the smart pointers. */
 	setSynchro    (0);
-    setBankWriter (0);
+    setBankWriter (0); //peut etre ceci est fait avant que le writer thread ne soit killé ?
 }
 
 //no const otherwise error with tKmer.setData
@@ -1312,7 +1316,7 @@ void CorrectReads::writeSequence(){
 		_bankwriter->insert(*_sequence);//
 		_temp_nb_seq_done ++;
 		
-		if(_temp_nb_seq_done == 10000) // careful with this val, should be a divisor of buffer size in ordered bank
+		if(_temp_nb_seq_done == 10000) // careful with this val, should be a divisor of buffer size in ordered bank //was 10000
 		{
 			_bankwriter->incDone(_temp_nb_seq_done);
 			_temp_nb_seq_done=0;
