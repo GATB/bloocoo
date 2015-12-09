@@ -81,17 +81,26 @@ public:
        // printf ("  t_arg.obw %p    bank %p ",t_arg.obw,_ref);
         pthread_mutex_init(&writer_mutex, NULL);
         pthread_cond_init (&writer_available_cond, NULL);
+
         pthread_cond_init (&buffer_full_cond, NULL);
         
         pthread_create (&_thread, NULL,  writer, &t_arg);
-       // printf("--OrderedBankWriter constructor, create thread  %p  ,    this %p    cond %p   targs %p--\n",&_thread,this,&buffer_full_cond, &t_arg );
+	 // printf("--OrderedBankWriter constructor, create thread  %p  ,    this %p    cond %p   targs %p--\n",&_thread,this,&buffer_full_cond, &t_arg );
 
     }
     
     /** Destructor. */
     ~OrderedBankWriter ()
 	{
+		//this should not be called before  writer thread has been killed !!
+		
+		
+		//////////// first wait for writer thread to finish
+		pthread_join(_thread,NULL);
+		
+		//ici mettre code attente threads
 		//printf(" OrderedBankWriter destructor,   this %p   \n",this );
+		
 		pthread_mutex_destroy(&writer_mutex);
 
         setRef(0);
@@ -109,6 +118,7 @@ public:
     thread_args t_arg;
     pthread_mutex_t writer_mutex;
     pthread_cond_t writer_available_cond;
+
     pthread_cond_t buffer_full_cond;
     int _writer_available ;
 	int _writer_kill_order ;
