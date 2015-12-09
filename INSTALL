@@ -1,0 +1,14 @@
+#CMake is required to compile Bloocoo (http://www.cmake.org/cmake/resources/software.html)
+#you can install Bloocoo by executing this file:  sh INSTALL
+# Prepare directories:
+mkdir  build
+# Go in the 'build' directory
+cd build
+# Prepare the makefile
+cmake ..
+# Run the newly created makefile:
+make
+# Go back at the installation root directory
+cd ..
+#toy example
+./build/Bloocoo -file data/reads.fasta

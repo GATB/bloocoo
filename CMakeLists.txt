@@ -70,7 +70,7 @@ INSTALL (TARGETS ${PROJECT_NAME} DESTINATION bin)
 INSTALL (FILES ${CMAKE_CURRENT_SOURCE_DIR}/scripts/metaBloocoo DESTINATION bin)
 
 # For the source archive, we exclude some unwanted directories.
-SET (CPACK_SOURCE_IGNORE_FILES  ${CPACK_SOURCE_IGNORE_FILES} "/build/" "/test/" "/sam_stats/"  ".gitignore$")
+SET (CPACK_SOURCE_IGNORE_FILES  ${CPACK_SOURCE_IGNORE_FILES} "/build*" "/test/" "/sam_stats/"  ".gitignore$")
 
 # To be done at the end. 
 INCLUDE (Delivery)
