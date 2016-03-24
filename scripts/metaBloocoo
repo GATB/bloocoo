@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
@@ -16,12 +16,12 @@ Then, determine suitable correction thresholds, and execute:
 
 The order of thresholds does not matter. metaBloocoo will always correct from the largest threshold to the smallest.
 
-""" 
+"""
 
 from subprocess import call, Popen, PIPE
 from glob import glob
 from re import match
-import sys, os 
+import sys, os
 
 if sys.version_info[0] == 2 and sys.version_info[1] < 5:
     exit("Python >= 2.5 is required")
@@ -36,9 +36,17 @@ if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
 
 arguments = sys.argv[2:]
 
-DIR = os.path.dirname(os.path.realpath(__file__))
-if DIR.endswith("scripts"):
-    DIR = DIR[:-7] + "build" #development hack
+BLOOCOO_BINDIR = os.path.dirname(os.path.realpath(__file__))
+H5DUMP_BINDIR = BLOOCOO_BINDIR
+
+# devel mode : metabloocoo is a link to scripts dir, so we have
+# to locate Bloocoo binary relatively to ../build/bin
+# prod mode : metaBloocoo and Bloocoo are in the same directory, so we do not
+# change above-defined paths
+bloocoo_dir = BLOOCOO_BINDIR+"/../build/bin"
+if os.path.exists(bloocoo_dir+"/Bloocoo"):
+    BLOOCOO_BINDIR = bloocoo_dir
+    H5DUMP_BINDIR = BLOOCOO_BINDIR+"/../ext/gatb-core/bin"
 
 # all arguments with values
 arguments_with_values = [ (sys.argv[i-1],  sys.argv[i]) for i in xrange(len(sys.argv)) if i > 0 and sys.argv[i-1].startswith("-") and not sys.argv[i].startswith("-")]
@@ -84,8 +92,8 @@ def clamp_histogram(histogram_raw):
         new_histogram += [histoval]
         if sum_up_to[i] >= 0.99 * cumsum:
             histogram_raw = "\n".join(histogram_raw.split("\n")[:i])
-            break 
- 
+            break
+
     return new_histogram, histogram_raw
 
 def determine_output_file(phase, threshold, passing_thresholds):
@@ -104,14 +112,14 @@ def determine_output_file(phase, threshold, passing_thresholds):
     if phase == 1:
         # first phase consists of countig with a threshold of 2, and
         # outputting to the h5 file for the first threshold value
-        # but we don't yet know the threshold value, so just set it as 
+        # but we don't yet know the threshold value, so just set it as
         # normal output for now; will be symlinked later
         return output_file + "_count"
     else:
         if threshold == passing_thresholds[0]:
             # symlink output from phase 1:
             # [output_file]_count.h5
-            # to 
+            # to
             # [output_file]_corrected_tX.fastq.h5
             # this is because Bloocoo expects that the h5 file matches the output prefix:
             #    _solidFile = getInput()->get(STR_URI_OUTPUT) ?
@@ -140,7 +148,7 @@ def determine_input_file(phase, threshold, previous_threshold, passing_threshold
 
 
 def execute(phase):
-    rc = 0 
+    rc = 0
     try:
         if phase == 1:
             passing_thresholds = [2]
@@ -152,7 +160,7 @@ def execute(phase):
             input_file = determine_input_file(phase, threshold, previous_threshold, passing_thresholds)
 
             output_file = determine_output_file(phase, threshold, passing_thresholds)
-           
+
             # set phase arguments
             if phase == 2:
                 if threshold == passing_thresholds[0]: # load from h5 for first threshold only
@@ -163,7 +171,7 @@ def execute(phase):
                 phase_arguments = ["-count-only"]
 
             # bloocoo call
-            cmd = ["%s/Bloocoo" % DIR, "-abundance-min", str(threshold), "-file", input_file, "-out", output_file] + arguments_except_thresholds_and_inout + phase_arguments
+            cmd = ["%s/Bloocoo" % BLOOCOO_BINDIR, "-abundance-min", str(threshold), "-file", input_file, "-out", output_file] + arguments_except_thresholds_and_inout + phase_arguments
             print "command line: " + " " .join(cmd)
             rc = call(cmd)
 
@@ -187,7 +195,7 @@ def execute(phase):
         output_file = determine_output_file(phase, 0, [])
         h5file = output_file + ".h5"
         try:
-            cmd = "%s/ext/gatb-core/bin/h5dump -y -d histogram/histogram" % DIR
+            cmd = "%s/h5dump -y -d histogram/histogram" % H5DUMP_BINDIR
             cmd = cmd.split(" ")
             cmd += [h5file]
             p1 = Popen(cmd, stdout=PIPE)
@@ -222,7 +230,7 @@ def execute(phase):
                 has_gnuplot = True
             except OSError:
                 has_gnuplot = False
-                print "gnuplot not found on path, won't plot histogram" 
+                print "gnuplot not found on path, won't plot histogram"
 
             plot_type = "gnuplot_term"
             if "-alt_ascii_graph" in sys.argv:
@@ -245,14 +253,14 @@ def execute(phase):
                 p = Popen(cmd, stdin=PIPE, stdout=PIPE)
                 p.communicate(input=histogram_raw)
                 print "Done"
-            
-    
+
+
         except Exception as e:
             print >>sys.stderr, "Execution of histogram display after phase 1 failed:", e
             import traceback
             print >>sys.stderr, traceback.format_exc()
             exit(1)
-    
+
 
 if sys.argv[1] == "count":
     execute(1)
