@@ -14,7 +14,7 @@ else
  exit 1
 fi
 
-echo -n "Testing two close errors..."
+echo "Testing two close errors..."
 
 $bindir/Bloocoo -file datatest/errclose.fasta -kmer-size 31 -abundance-min 5 -err-tab &> /dev/null
 
