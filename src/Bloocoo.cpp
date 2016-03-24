@@ -18,7 +18,7 @@
  *****************************************************************************/
 
 #include <Bloocoo.hpp>
-#include <DSK.hpp>
+//#include <DSK.hpp>
 
 #include <libgen.h>
 
@@ -661,7 +661,7 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
     printf("NBITS per kmer %f \n",NBITS_PER_KMER);
 
     /** We retrieve the solid kmers from the storage content (likely built by DSK). */
-    Storage* storage = StorageFactory(DSK::getStorageMode()).create (_solidFile, false, false);
+    Storage* storage = StorageFactory(STORAGE_HDF5).create (_solidFile, false, false);
     LOCAL (storage);
 
     /** We get an iterator over all the [kmer,abundance]  (ie. from all solid partitions). */
