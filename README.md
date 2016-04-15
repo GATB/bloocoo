@@ -85,3 +85,7 @@ by
 this will allow to use k<63
 
 For larger k, change the value such that it is a multiple of 32
+
+#Contact
+
+To contact a developer, request help, etc: https://gatb.inria.fr/contact/
