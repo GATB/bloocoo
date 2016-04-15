@@ -1,25 +1,32 @@
-# Bloocoo user manual
+# Bloocoo 
 
-Gaetan Benoit, Claire Lemaitre, Dominique Lavenier, Guillaume Rizk.		  		  
-					  Dec 2015
+| **Linux** | **Mac OSX** |
+|-----------|-------------|
+[![Build Status](https://ci.inria.fr/gatb-core/view/Bloocoo/job/tool-bloocoo-build-debian7-64bits-gcc-4.7/badge/icon)](https://ci.inria.fr/gatb-core/view/Bloocoo/job/tool-bloocoo-build-debian7-64bits-gcc-4.7/) | [![Build Status](https://ci.inria.fr/gatb-core/view/Bloocoo/job/tool-bloocoo-build-macos-10.9.5-gcc-4.2.1/badge/icon)](https://ci.inria.fr/gatb-core/view/Bloocoo/job/tool-bloocoo-build-macos-10.9.5-gcc-4.2.1/)
 
+[![License](http://img.shields.io/:license-affero-blue.svg)](http://www.gnu.org/licenses/agpl-3.0.en.html)
 
+#What is Bloocoo?
+Bloocoo is a k-mer spectrum-based read error corrector, designed to correct large datasets with a very low memory footprint. It uses the disk streaming k-mer counting algorithm contained in the GATB library, and inserts solid k-mers in a bloom-filter. The correction procedure is similar to the Musket multistage approach.  Bloocoo yields similar results while requiring far less memory: as an example, it can correct whole human genome re-sequencing reads at 70 x coverage with less than 4GB of memory.
+
+G. Benoit, D. Lavenier, C. Lemaitre, G. Rizk.  (2015) [Bloocoo, a memory efficient read corrector](https://hal.inria.fr/hal-01092960). Inria-HAL.
 								
-#LICENSE
-	*  GNU AFFERO GENERAL PUBLIC LICENSE
-	*  Copyright (C) 2015 INRIA
-	see the LICENSE file
-	
-#INSTALL
+# Getting the latest source code
 
-CMake is required to compile bloocoo (http://www.cmake.org/cmake/resources/software.html)
+## Requirements
 
-See the INSTALL file.
+CMake 2.6+; see http://www.cmake.org/cmake/resources/software.html
 
-NOTE: If you retrieved a source archive, you can compile the project with 'sh INSTALL’
+c++ compiler; compilation was tested with gcc and g++ version>=4.5 (Linux) and clang version>=4.1 (Mac OSX).
 
-Compilation was tested with gcc and g++ version>=4.5 and clang version>=4.1
-	
+## Instructions
+
+    # get a local copy of minia source code
+    git clone --recursive https://github.com/GATB/bloocoo.git
+    
+    # compile the code an run a simple test on your computer
+    cd bloocoo
+    sh INSTALL
 
 # User manual	 
 								
