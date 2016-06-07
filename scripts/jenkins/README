@@ -2,5 +2,5 @@ These scripts are intended to be used with the Jenkins CI Platform available at 
 
 They can be called from a Jenkins Task / Build / Execute script, as follows:
 
-/bin/bash -xv scripts/jenkins/xxx.sh
+/bin/bash -xv gatb-${TOOL_NAME}/scripts/jenkins/xxx.sh
 
