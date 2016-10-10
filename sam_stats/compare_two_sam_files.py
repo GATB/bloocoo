@@ -129,6 +129,7 @@ for cor_read in mapped_reads_corrected:
             print "skipped",skip,"uncorrected reads"
     except StopIteration:
         print "end of uncorr reads (skip %d, nb cor reads processed %d, was looking for cor read id %s)" % (skip, cor_read_counter, cor_read.qname)
+        report()
         sys.exit(1) 
     #assert(cor_read.qname == uncor_read.qname)
     
