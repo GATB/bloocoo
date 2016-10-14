@@ -107,7 +107,8 @@ for cor_read in mapped_reads_corrected:
     if cor_read.alen is None:
         # also skip the corresponding uncorrected read
         uncor_read = uncor_iterator.next()
-        assert(uncor_read.alen is None)
+        if uncor_read.alen is not None:
+            print "Warning: an uncorrected read aligns but its corrected version does not:", cor_read.qname, uncor_read.qname
         continue
     nb_bases_in_cor_reads += cor_read.alen 
     cor_read_counter += 1
