@@ -96,7 +96,7 @@ def report():
     print "good/bad base corrections", good_corrections, "/", bad_corrections
     print "better/worse reads", better_reads, "/", worse_reads
     print "per reference:"
-    template = "{0:12}|{1:12}|{2:12}|{3:12}|{4:12}|{5:12}"
+    template = "{0:35}|{1:12}|{2:12}|{3:12}|{4:12}|{5:12}"
     print template.format("refname","abundance","bases_good","bases_bad","reads_better","reads_worse")
     for refname in report_ref_keys():
         print template.format(refname, ref_abundances(refname), good_corrections_per_ref[refname], bad_corrections_per_ref[refname], better_reads_per_ref[refname],  worse_reads_per_ref[refname])
@@ -105,6 +105,9 @@ def report():
 
 for cor_read in mapped_reads_corrected:
     if cor_read.alen is None:
+        # also skip the corresponding uncorrected read
+        uncor_read = uncor_iterator.next()
+        assert(uncor_read.alen is None)
         continue
     nb_bases_in_cor_reads += cor_read.alen 
     cor_read_counter += 1
