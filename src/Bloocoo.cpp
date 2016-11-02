@@ -452,7 +452,7 @@ void Bloocoo::execute ()
 			if(itBanks.size()>1)
 				bankname = (inbank->getIdNb(i)); // System::file().getBaseName
 			else
-				bankname = System::file().getBaseName(inbank->getId()); // was System::file().getBaseName
+				bankname = inbank->getId(); // System::file().getBaseName(inbank->getId()); // was System::file().getBaseName
 			
 			if( bankname.find("fastq") !=  string::npos )  fastq_mode =true;
 			if( bankname.find("fq") !=  string::npos )     fastq_mode =true;
