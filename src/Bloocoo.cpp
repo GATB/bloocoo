@@ -43,7 +43,7 @@ const char* Bloocoo::STR_MAX_TRIM            = "-max-trim";
 
 const char* Bloocoo::STR_HISTO_ONLY            = "-count-only";
 const char* Bloocoo::STR_FROM_H5            = "-from-h5";
-
+const char* Bloocoo::STR_BIT_BLOOM_PER_KMER = "-nbits-bloom";
 
 
 // these 2 tabs are now known globally
@@ -225,6 +225,12 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ION, "ion correction mode", false));
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ERR_TAB, "generate error tabs", false));
     getParser()->push_back(new OptionOneParam(STR_MAX_TRIM, "max number of bases that can be trimmed per read", false));
+
+	getParser()->push_back(new OptionOneParam(STR_BIT_BLOOM_PER_KMER, "(advanced option) nb bits per kmer for bloom filter", false,"12"));
+
+	
+	
+	
 	
 	
 	getParser()->push_back(new OptionNoParam (Bloocoo::STR_FROM_H5, "do not re-compute kmer counts, suppose h5 file already computed (with previous run with -count-only)", false));
@@ -660,6 +666,16 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
     NBITS_PER_KMER = 12;
     printf("NBITS per kmer %f \n",NBITS_PER_KMER);
 
+	if(getInput()->get(STR_BIT_BLOOM_PER_KMER)){
+		NBITS_PER_KMER = getInput()->getInt(STR_BIT_BLOOM_PER_KMER);
+	}
+	
+	
+	int auto_cutoff = 0 ;
+	u_int64_t nbs = 0 ;
+	u_int64_t nb_kmers_infile;
+	int _nks;
+	
     /** We retrieve the solid kmers from the storage content (likely built by DSK). */
     Storage* storage = StorageFactory(STORAGE_HDF5).create (_solidFile, false, false);
     LOCAL (storage);
@@ -669,8 +685,41 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
 
     /** We get the number of solid kmers. */
     u_int64_t solidFileSize = solidCollection.getNbItems();
-    
-    u_int64_t estimatedBloomSize = (u_int64_t) ((double)solidFileSize * NBITS_PER_KMER);
+	nb_kmers_infile = solidCollection.getNbItems();
+
+	
+	if( ! getParser()->saw(STR_KMER_ABUNDANCE_MIN)){
+		
+		//retrieve cutoff
+		
+		Collection<NativeInt64>& cutoff  = storage->getGroup("histogram").getCollection<NativeInt64> ("cutoff");
+		Iterator<NativeInt64>* iter = cutoff.iterator();
+		LOCAL (iter);
+		for (iter->first(); !iter->isDone(); iter->next())  {
+			auto_cutoff = iter->item().toInt();
+		}
+		
+		//retrieve nb solids
+		
+		Collection<NativeInt64>& storagesolid  = storage->getGroup("histogram").getCollection<NativeInt64> ("nbsolidsforcutoff");
+		Iterator<NativeInt64>* iter2 = storagesolid.iterator();
+		LOCAL (iter2);
+		for (iter2->first(); !iter2->isDone(); iter2->next())  {
+			nbs = iter2->item().toInt();
+		}
+		
+		_nks = auto_cutoff;
+	}
+	else
+	{
+		auto_cutoff =0;
+		_nks =  getInput()->getInt(STR_KMER_ABUNDANCE_MIN);
+		nbs  = nb_kmers_infile;
+	}
+	
+	
+	
+    u_int64_t estimatedBloomSize = (u_int64_t) ((double)nbs * NBITS_PER_KMER);
     if (estimatedBloomSize ==0 ) { estimatedBloomSize = 1000; }
     
     /** We create the kmers iterator from the solid file. */
@@ -680,10 +729,18 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
         "fill bloom filter"
     );
     LOCAL (itKmers);
-    
+	
+	
+	if(auto_cutoff)
+		cout << "Abundance threshold: " << auto_cutoff << " (auto)    (nb solid kmers: " << nbs << ")"<< endl;
+	else
+		cout << "Abundance threshold: " << _nks << "    (nb solid kmers: " << nbs << ")"<< endl;
+	
+	
+	
     /** We instantiate the bloom object. */
     IProperties* stats = new Properties();  LOCAL (stats);
-    BloomBuilder<> builder (estimatedBloomSize, 7, _kmerSize, tools::misc::BLOOM_CACHE,getInput()->getInt(STR_NB_CORES));
+    BloomBuilder<> builder (estimatedBloomSize, 7, _kmerSize, tools::misc::BLOOM_CACHE,getInput()->getInt(STR_NB_CORES),auto_cutoff);
     IBloom<kmer_type>* bloom = builder.build (itKmers, stats);
     
     getInfo()->add (1, "bloom");

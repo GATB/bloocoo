@@ -93,7 +93,9 @@ public:
 	static const char* STR_PRECISION;
 	static const char* STR_SLOW;
 	static const char* STR_MAX_TRIM;
-    
+	static const char* STR_BIT_BLOOM_PER_KMER;
+
+	
     bool _wantErrTabFile;
     IFile*      _errfile;
     IFile*      _errfile_full;
