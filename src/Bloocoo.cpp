@@ -36,6 +36,8 @@ using namespace std;
 const char* Bloocoo::STR_ION                = "-ion";
 //const char* Bloocoo::STR_NB_VALIDATED_KMERS = "-nkmer-checked";
 const char* Bloocoo::STR_ERR_TAB            = "-err-tab";
+const char* Bloocoo::STR_MANUAL_SOLIDITY            = "-manual-solidity";
+
 const char* Bloocoo::STR_RECALL            = "-high-recall";
 const char* Bloocoo::STR_PRECISION            = "-high-precision";
 const char* Bloocoo::STR_SLOW            = "-slow";
@@ -226,12 +228,15 @@ Bloocoo::Bloocoo () : Tool("bloocoo"), _kmerSize(27), _inputBank (0), errtab_mut
     getParser()->push_back (new OptionNoParam (Bloocoo::STR_ERR_TAB, "generate error tabs", false));
     getParser()->push_back(new OptionOneParam(STR_MAX_TRIM, "max number of bases that can be trimmed per read", false));
 
-	getParser()->push_back(new OptionOneParam(STR_BIT_BLOOM_PER_KMER, "(advanced option) nb bits per kmer for bloom filter", false,"12"));
+	getParser()->push_back(new OptionOneParam(STR_BIT_BLOOM_PER_KMER, "(advanced option) nb bits per kmer for bloom filter", false,"12")); //
 
 	
 	
 	
-	
+	//had to add this becasue I cannot see if STR_KMER_ABUNDANCE_MIN was set or not (getParser()->saw() always return true because it has a default value)
+	//and I cannot change STR_KMER_ABUNDANCE_MIN default value because it is in gatb-core
+	getParser()->push_back (new OptionNoParam (Bloocoo::STR_MANUAL_SOLIDITY, "switch to manual solidity (use -abundance-min to set it)", false));
+
 	
 	getParser()->push_back(new OptionNoParam (Bloocoo::STR_FROM_H5, "do not re-compute kmer counts, suppose h5 file already computed (with previous run with -count-only)", false));
 	getParser()->push_back(new OptionNoParam (Bloocoo::STR_HISTO_ONLY, "do not correct, only count kmers", false));
@@ -593,7 +598,9 @@ void Bloocoo::chooseCorrectionParams(){
 	
 	 _fromH5Mode = getParser()->saw(Bloocoo::STR_FROM_H5);
 	 _countOnlyMode = getParser()->saw(Bloocoo::STR_HISTO_ONLY);
-
+	_manualSolidity = getParser()->saw(Bloocoo::STR_MANUAL_SOLIDITY);
+	
+	
 	if(isSlowMode){
 		_nb_less_restrictive_correction = 2;
 		if(isRecallMode){ //8-4 8-2
@@ -664,12 +671,12 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
     double lg2 = log(2);
     float NBITS_PER_KMER = log (16*_kmerSize*(lg2*lg2))/(lg2*lg2);
     NBITS_PER_KMER = 12;
-    printf("NBITS per kmer %f \n",NBITS_PER_KMER);
 
 	if(getInput()->get(STR_BIT_BLOOM_PER_KMER)){
 		NBITS_PER_KMER = getInput()->getInt(STR_BIT_BLOOM_PER_KMER);
 	}
-	
+	printf("NBITS per kmer %f \n",NBITS_PER_KMER);
+
 	
 	int auto_cutoff = 0 ;
 	u_int64_t nbs = 0 ;
@@ -688,9 +695,12 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
 	nb_kmers_infile = solidCollection.getNbItems();
 
 	
-	if( ! getParser()->saw(STR_KMER_ABUNDANCE_MIN)){
+
+		//	if( ! getParser()->saw(STR_KMER_ABUNDANCE_MIN)){ // this does not work ! always return true because it has a default value
+		if(!_manualSolidity){
 		
 		//retrieve cutoff
+		//printf("retrieving cutoff \n");
 		
 		Collection<NativeInt64>& cutoff  = storage->getGroup("histogram").getCollection<NativeInt64> ("cutoff");
 		Iterator<NativeInt64>* iter = cutoff.iterator();
@@ -734,7 +744,7 @@ IBloom<kmer_type>* Bloocoo::createBloom ()
 	if(auto_cutoff)
 		cout << "Abundance threshold: " << auto_cutoff << " (auto)    (nb solid kmers: " << nbs << ")"<< endl;
 	else
-		cout << "Abundance threshold: " << _nks << "    (nb solid kmers: " << nbs << ")"<< endl;
+		cout << "Abundance threshold: " << _nks << " (user set)  (nb solid kmers: " << nbs << ")"<< endl;
 	
 	
 	

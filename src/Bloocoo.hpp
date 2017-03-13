@@ -87,6 +87,7 @@ public:
     //static const char* STR_NB_MIN_VALID;
     //static const char* STR_NB_VALIDATED_KMERS;
     static const char* STR_ERR_TAB;
+	static const char* STR_MANUAL_SOLIDITY;
 	static const char* STR_RECALL;
 	static const char* STR_HISTO_ONLY;
 	static const char* STR_FROM_H5;
@@ -104,7 +105,7 @@ public:
 	
 	bool _fromH5Mode ;
 	bool _countOnlyMode ;
-	
+	bool _manualSolidity;
 	
 	bool _ion_mode;
     unsigned int _max_trim;
