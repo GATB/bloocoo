@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import unicode_literals
+from __future__ import print_function  
 
 doc = """metaBloocoo
 
@@ -16,6 +17,7 @@ Then, determine suitable correction thresholds, and execute:
 
 The order of thresholds does not matter. metaBloocoo will always correct from the largest threshold to the smallest.
 
+Dependencies: gnuplot
 """
 
 from subprocess import call, Popen, PIPE
@@ -34,6 +36,10 @@ if sys.version_info[0] == 2:
 if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
     exit(doc)
 
+#http://stackoverflow.com/questions/5574702/how-to-print-to-stderr-in-python
+def eprint(*args, **kwargs):
+        print(*args, file=sys.stderr, **kwargs)
+
 arguments = sys.argv[2:]
 
 BLOOCOO_BINDIR = os.path.dirname(os.path.realpath(__file__))
@@ -49,7 +55,7 @@ if os.path.exists(bloocoo_dir+"/Bloocoo"):
     H5DUMP_BINDIR = BLOOCOO_BINDIR+"/../ext/gatb-core/bin"
 
 # all arguments with values
-arguments_with_values = [ (sys.argv[i-1],  sys.argv[i]) for i in xrange(len(sys.argv)) if i > 0 and sys.argv[i-1].startswith("-") and not sys.argv[i].startswith("-")]
+arguments_with_values = [ (sys.argv[i-1],  sys.argv[i]) for i in range(len(sys.argv)) if i > 0 and sys.argv[i-1].startswith("-") and not sys.argv[i].startswith("-")]
 
 # all arguments, regardless if they have values or not, except the -t1 <x> [-t2 <y> ..] args and also without the -alt_ascii_graph
 arguments_except_thresholds = [ arg for i, arg in enumerate(arguments) if not match(r"-t(\d)", arg) and not (i > 0 and match(r"-t(\d)", arguments[i-1])) and not arguments[i] == "-alt_ascii_graph"]
@@ -172,17 +178,17 @@ def execute(phase):
 
             # bloocoo call
             cmd = ["%s/Bloocoo" % BLOOCOO_BINDIR, "-abundance-min", str(threshold), "-file", input_file, "-out", output_file] + arguments_except_thresholds_and_inout + phase_arguments
-            print "command line: " + " " .join(cmd)
-            rc = call(cmd)
+            print("command line: " + " " .join(cmd))
+            #rc = call(cmd)
 
             previous_threshold = threshold
             if rc != 0:
                 break
 
     except OSError as e:
-        print >>sys.stderr, "Execution of phase %d failed:" % phase
+        eprint("Execution of phase %d failed:" % phase)
         import traceback
-        print >>sys.stderr, traceback.format_exc()
+        eprint(traceback.format_exc())
         exit(1)
 
     if rc != 0:
@@ -195,7 +201,7 @@ def execute(phase):
         output_file = determine_output_file(phase, 0, [])
         h5file = output_file + ".h5"
         try:
-            cmd = "%s/h5dump -y -d histogram/histogram" % H5DUMP_BINDIR
+            cmd = "%s/gatb-h5dump -y -d histogram/histogram" % H5DUMP_BINDIR
             cmd = cmd.split(" ")
             cmd += [h5file]
             p1 = Popen(cmd, stdout=PIPE)
@@ -215,6 +221,8 @@ def execute(phase):
             if len(histogram_raw) < 2:
                 raise Exception("No histogram was produced, see error above")
 
+            if type(histogram_raw) is bytes:
+                histogram_raw = histogram_raw.decode("utf-8")
             histogram_raw = histogram_raw.replace(",","") # remove all commas
 
             hist_fname = h5file + ".histogram"
@@ -223,14 +231,14 @@ def execute(phase):
 
             histogram, histogram_raw = clamp_histogram(histogram_raw)
 
-            print "displaying histogram (raw values are in %s):" % hist_fname
+            print("displaying histogram (raw values are in %s):" % hist_fname)
 
             try:
                 call(["gnuplot", '--version'])
                 has_gnuplot = True
             except OSError:
                 has_gnuplot = False
-                print "gnuplot not found on path, won't plot histogram"
+                print("gnuplot not found on path, won't plot histogram")
 
             plot_type = "gnuplot_term"
             if "-alt_ascii_graph" in sys.argv:
@@ -244,21 +252,21 @@ def execute(phase):
             elif plot_type == "gnuplot_term" and has_gnuplot:
                 cmd = ["gnuplot","-p", "-e","set term dumb; unset key;  plot \"-\" with lines"]
                 p = Popen(cmd,stdin=PIPE,stdout=PIPE)
-                print p.communicate(input=histogram_raw)[0]
+                print(p.communicate(input=bytes(histogram_raw,'utf-8'))[0].decode('utf-8'))
 
             if has_gnuplot: # anyway plot histogram graphically
                 hist_png_fname = h5file + ".histogram.png"
-                print "Also plotting to file "+ hist_png_fname
+                print("Also plotting to file "+ hist_png_fname)
                 cmd = ["gnuplot","-e","set term png; set output \"%s\"; unset key;  plot \"-\" with lines" % hist_png_fname]
                 p = Popen(cmd, stdin=PIPE, stdout=PIPE)
-                p.communicate(input=histogram_raw)
-                print "Done"
+                p.communicate(input=bytes(histogram_raw,'utf-8'))
+                print("Done")
 
 
         except Exception as e:
-            print >>sys.stderr, "Execution of histogram display after phase 1 failed:", e
+            eprint("Execution of histogram display after phase 1 failed:", e)
             import traceback
-            print >>sys.stderr, traceback.format_exc()
+            eprint(traceback.format_exc())
             exit(1)
 
 
